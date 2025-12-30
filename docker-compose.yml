@@ -1,0 +1,287 @@
+version: '3.8'
+
+services:
+  # Apache Reverse Proxy
+  apache:
+    build:
+      context: ./docker/apache
+      dockerfile: Dockerfile
+    container_name: hippo-apache
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/apache/httpd.conf:/usr/local/apache2/conf/httpd.conf
+      - ./docker/apache/ssl:/usr/local/apache2/conf/ssl
+    depends_on:
+      - api-gateway
+    networks:
+      - hippo-network
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: hippo-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hippo_db}
+      POSTGRES_USER: ${POSTGRES_USER:-hippo_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hippo_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./docker/postgres/migrations:/docker-entrypoint-initdb.d/migrations
+    ports:
+      - "5432:5432"
+    networks:
+      - hippo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hippo_user} -d ${POSTGRES_DB:-hippo_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: hippo-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - hippo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: hippo-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - hippo-network
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: hippo-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - hippo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: hippo-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - hippo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: hippo-api-gateway
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${API_GATEWAY_PORT:-3000}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - hippo-network
+    restart: unless-stopped
+
+  # Data Service
+  data-service:
+    build:
+      context: ./services/data-service
+      dockerfile: Dockerfile
+    container_name: hippo-data-service
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${DATA_SERVICE_PORT:-3001}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-hippo_db}
+      - POSTGRES_USER=${POSTGRES_USER:-hippo_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hippo_password}
+      - DATA_PROVIDER_API_URL=${DATA_PROVIDER_API_URL:-https://provider.example}
+      - TRANSLATION_SERVICE_URL=http://translation-service:3004
+    depends_on:
+      - redis
+      - postgres
+      - translation-service
+    networks:
+      - hippo-network
+    restart: unless-stopped
+
+  # Queue Service (Kafka Consumer)
+  queue-service:
+    build:
+      context: ./services/queue-service
+      dockerfile: Dockerfile
+    container_name: hippo-queue-service
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - KAFKA_BROKER=kafka:29092
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-hippo_db}
+      - POSTGRES_USER=${POSTGRES_USER:-hippo_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hippo_password}
+    depends_on:
+      - kafka
+      - redis
+      - postgres
+      - data-service
+    networks:
+      - hippo-network
+    restart: unless-stopped
+
+  # Report Service
+  report-service:
+    build:
+      context: ./services/report-service
+      dockerfile: Dockerfile
+    container_name: hippo-report-service
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${REPORT_SERVICE_PORT:-3003}
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-hippo_db}
+      - POSTGRES_USER=${POSTGRES_USER:-hippo_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hippo_password}
+      - KAFKA_BROKER=kafka:29092
+      - DATA_SERVICE_URL=http://data-service:3001
+      - TRANSLATION_SERVICE_URL=http://translation-service:3004
+    depends_on:
+      - minio
+      - postgres
+      - kafka
+      - data-service
+      - translation-service
+    networks:
+      - hippo-network
+    restart: unless-stopped
+
+  # Translation Service
+  translation-service:
+    build:
+      context: ./services/translation-service
+      dockerfile: Dockerfile
+    container_name: hippo-translation-service
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${TRANSLATION_SERVICE_PORT:-3004}
+    networks:
+      - hippo-network
+    restart: unless-stopped
+
+  # User Service
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: hippo-user-service
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${USER_SERVICE_PORT:-3005}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-hippo_db}
+      - POSTGRES_USER=${POSTGRES_USER:-hippo_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hippo_password}
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - hippo-network
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hippo-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - hippo-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
+  minio_data:
+
+networks:
+  hippo-network:
+    driver: bridge

@@ -1,0 +1,49 @@
+{
+  "ui": {
+    "dashboard": "Dashboard",
+    "stockPrice": "Stock Price",
+    "priceChange": "Price Change",
+    "previousClose": "Previous Close",
+    "news": "News",
+    "companyName": "Hippo Equity Research",
+    "stockReport": "Stock Report",
+    "generatedOn": "Generated on",
+    "page": "Page",
+    "stockSummary": "Stock Summary",
+    "newsArticles": "News Articles",
+    "financialAnalysis": "Financial Analysis",
+    "competitors": "Competitors",
+    "financialHealth": "Financial Health",
+    "growth": "Growth",
+    "profitability": "Profitability",
+    "valuation": "Valuation",
+    "shareholderReturns": "Shareholder Returns",
+    "keyPoints": "Key Points",
+    "summary": "Summary",
+    "rating": "Rating",
+    "industry": "Industry",
+    "companyDescription": "Company Description",
+    "loading": "Loading...",
+    "error": "Error",
+    "retry": "Retry",
+    "generateReport": "Generate Report",
+    "downloadReport": "Download Report",
+    "selectLanguage": "Select Language",
+    "language": "Language"
+  },
+  "metrics": {
+    "currentPrice": "Current Price",
+    "priceChange": "Price Change",
+    "priceChangePercent": "Price Change %",
+    "previousClose": "Previous Close",
+    "tradingDate": "Trading Date",
+    "priceHistory": "Price History"
+  },
+  "sentiment": {
+    "veryNegative": "Very Negative",
+    "negative": "Negative",
+    "neutral": "Neutral",
+    "positive": "Positive",
+    "veryPositive": "Very Positive"
+  }
+}

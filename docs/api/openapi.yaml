@@ -1,0 +1,772 @@
+openapi: 3.0.3
+info:
+  title: Hippo Equity Research API
+  description: |
+    Production-ready, scalable web application for global stock market data aggregation and analysis.
+    
+    The API provides endpoints for:
+    - Stock data fetching and normalization
+    - Multi-language content translation
+    - Autopilot queue processing
+    - PDF report generation
+    - User preferences management
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@hippo-equity.com
+  license:
+    name: Proprietary
+    url: https://hippo-equity.com/license
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+  - url: https://api.hippo-equity.com
+    description: Production server
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Data
+    description: Stock data fetching and analysis
+  - name: Queue
+    description: Autopilot queue processing
+  - name: Reports
+    description: PDF report generation
+  - name: Translation
+    description: Multi-language translation
+  - name: User
+    description: User preferences management
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Returns the health status of the API Gateway and all downstream services
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: Service is unhealthy or degraded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /api/data/stock/{symbol}:
+    get:
+      tags:
+        - Data
+      summary: Get stock data
+      description: Fetches complete stock data including news, financial analysis, and current price
+      operationId: getStockData
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          description: Stock symbol (e.g., AAPL, GOOGL)
+          schema:
+            type: string
+            pattern: '^[A-Z]{1,5}$'
+            example: AAPL
+        - name: language
+          in: query
+          required: false
+          description: Language code for translations
+          schema:
+            type: string
+            enum: [en, es, fr, de, zh, he]
+            default: en
+      responses:
+        '200':
+          description: Stock data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockDataResponse'
+        '400':
+          description: Invalid symbol
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/data/stock/{symbol}/news:
+    get:
+      tags:
+        - Data
+      summary: Get stock news
+      description: Fetches news articles for a stock symbol
+      operationId: getStockNews
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+            example: AAPL
+        - name: language
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [en, es, fr, de, zh, he]
+            default: en
+      responses:
+        '200':
+          description: News articles retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsResponse'
+
+  /api/data/stock/{symbol}/analysis:
+    get:
+      tags:
+        - Data
+      summary: Get financial analysis
+      description: Fetches financial analysis for a stock symbol
+      operationId: getFinancialAnalysis
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+            example: AAPL
+        - name: language
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [en, es, fr, de, zh, he]
+            default: en
+      responses:
+        '200':
+          description: Financial analysis retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisResponse'
+
+  /api/queue/enqueue:
+    post:
+      tags:
+        - Queue
+      summary: Enqueue symbols for processing
+      description: Adds stock symbols to the autopilot queue for batch processing
+      operationId: enqueueSymbols
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnqueueRequest'
+      responses:
+        '200':
+          description: Symbols enqueued successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnqueueResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/queue/status/{queueId}:
+    get:
+      tags:
+        - Queue
+      summary: Get queue status
+      description: Returns the current status of a queue including progress and ETA
+      operationId: getQueueStatus
+      parameters:
+        - name: queueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Queue status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueStatus'
+
+  /api/report/generate:
+    post:
+      tags:
+        - Reports
+      summary: Generate PDF report
+      description: Generates a professional PDF report for a stock symbol
+      operationId: generatePDF
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateReportRequest'
+      responses:
+        '200':
+          description: PDF generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateReportResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/report/download/{reportId}:
+    get:
+      tags:
+        - Reports
+      summary: Download PDF report
+      description: Downloads a generated PDF report
+      operationId: downloadPDF
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Report not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/report/metadata/{reportId}:
+    get:
+      tags:
+        - Reports
+      summary: Get report metadata
+      description: Returns metadata for a generated PDF report
+      operationId: getReportMetadata
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Metadata retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportMetadata'
+
+  /api/translation/translate:
+    post:
+      tags:
+        - Translation
+      summary: Translate UI string
+      description: Translates a UI string key to the specified language
+      operationId: translateString
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslateRequest'
+      responses:
+        '200':
+          description: Translation successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslateResponse'
+
+  /api/translation/translate-content:
+    post:
+      tags:
+        - Translation
+      summary: Translate content object
+      description: Translates content objects (news articles, financial analysis) to the specified language
+      operationId: translateContent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslateContentRequest'
+      responses:
+        '200':
+          description: Content translated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslateContentResponse'
+
+  /api/user/preferences/language:
+    post:
+      tags:
+        - User
+      summary: Set language preference
+      description: Sets the language preference for a user
+      operationId: setLanguagePreference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LanguagePreferenceRequest'
+      responses:
+        '200':
+          description: Language preference set successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LanguagePreferenceResponse'
+
+  /api/user/preferences/language/{userId}:
+    get:
+      tags:
+        - User
+      summary: Get language preference
+      description: Retrieves the language preference for a user
+      operationId: getLanguagePreference
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Language preference retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LanguagePreference'
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy, degraded]
+        timestamp:
+          type: string
+          format: date-time
+        service:
+          type: string
+        version:
+          type: string
+        dependencies:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+              error:
+                type: string
+
+    StockDataResponse:
+      type: object
+      properties:
+        symbol:
+          type: string
+        stockData:
+          $ref: '#/components/schemas/StockData'
+        news:
+          type: array
+          items:
+            $ref: '#/components/schemas/NewsArticle'
+        analysis:
+          $ref: '#/components/schemas/FinancialAnalysis'
+        timestamp:
+          type: string
+          format: date-time
+
+    StockData:
+      type: object
+      properties:
+        symbol:
+          type: string
+        currentPrice:
+          type: number
+        previousClose:
+          type: number
+        priceChange:
+          type: number
+        priceChangePercent:
+          type: number
+        tradingDate:
+          type: string
+          format: date
+
+    NewsArticle:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        contentPreview:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+        sentiment:
+          type: number
+          minimum: -2
+          maximum: 4
+        source:
+          type: string
+        url:
+          type: string
+          format: uri
+
+    FinancialAnalysis:
+      type: object
+      properties:
+        symbol:
+          type: string
+        companyDescription:
+          type: string
+        competitors:
+          $ref: '#/components/schemas/AnalysisSection'
+        financialHealth:
+          $ref: '#/components/schemas/AnalysisSection'
+        growth:
+          $ref: '#/components/schemas/AnalysisSection'
+        profitability:
+          $ref: '#/components/schemas/AnalysisSection'
+        shareholder_returns:
+          $ref: '#/components/schemas/AnalysisSection'
+        valuation:
+          $ref: '#/components/schemas/AnalysisSection'
+
+    AnalysisSection:
+      type: object
+      properties:
+        keyPoints:
+          type: array
+          items:
+            type: string
+        rating:
+          type: number
+          minimum: 1
+          maximum: 5
+        summary:
+          type: string
+
+    NewsResponse:
+      type: object
+      properties:
+        symbol:
+          type: string
+        language:
+          type: string
+        news:
+          type: array
+          items:
+            $ref: '#/components/schemas/NewsArticle'
+        count:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+
+    AnalysisResponse:
+      type: object
+      properties:
+        symbol:
+          type: string
+        language:
+          type: string
+        analysis:
+          $ref: '#/components/schemas/FinancialAnalysis'
+        timestamp:
+          type: string
+          format: date-time
+
+    EnqueueRequest:
+      type: object
+      required:
+        - symbols
+      properties:
+        symbols:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          example: [AAPL, GOOGL, MSFT]
+
+    EnqueueResponse:
+      type: object
+      properties:
+        queueId:
+          type: string
+          format: uuid
+        symbols:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        createdAt:
+          type: string
+          format: date-time
+
+    QueueStatus:
+      type: object
+      properties:
+        queueId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+        currentTask:
+          type: string
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/QueueTask'
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    QueueTask:
+      type: object
+      properties:
+        id:
+          type: string
+        symbol:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    GenerateReportRequest:
+      type: object
+      required:
+        - symbol
+      properties:
+        symbol:
+          type: string
+          example: AAPL
+        language:
+          type: string
+          enum: [en, es, fr, de, zh, he]
+          default: en
+        userId:
+          type: string
+          default: anonymous
+
+    GenerateReportResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        reportId:
+          type: string
+          format: uuid
+        symbol:
+          type: string
+        language:
+          type: string
+        downloadUrl:
+          type: string
+          format: uri
+        fileSize:
+          type: integer
+        generatedAt:
+          type: string
+          format: date-time
+
+    ReportMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        symbol:
+          type: string
+        language:
+          type: string
+        filePath:
+          type: string
+        fileSize:
+          type: integer
+        generatedAt:
+          type: string
+          format: date-time
+        downloadUrl:
+          type: string
+          format: uri
+
+    TranslateRequest:
+      type: object
+      required:
+        - key
+      properties:
+        key:
+          type: string
+          example: ui.dashboard
+        language:
+          type: string
+          enum: [en, es, fr, de, zh, he]
+          default: en
+
+    TranslateResponse:
+      type: object
+      properties:
+        key:
+          type: string
+        language:
+          type: string
+        translation:
+          type: string
+
+    TranslateContentRequest:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: object
+          additionalProperties: true
+        language:
+          type: string
+          enum: [en, es, fr, de, zh, he]
+          default: en
+
+    TranslateContentResponse:
+      type: object
+      properties:
+        language:
+          type: string
+        original:
+          type: object
+          additionalProperties: true
+        translated:
+          type: object
+          additionalProperties: true
+
+    LanguagePreferenceRequest:
+      type: object
+      required:
+        - userId
+        - language
+      properties:
+        userId:
+          type: string
+        language:
+          type: string
+          enum: [en, es, fr, de, zh, he]
+
+    LanguagePreferenceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        preferences:
+          $ref: '#/components/schemas/UserPreferences'
+        message:
+          type: string
+
+    LanguagePreference:
+      type: object
+      properties:
+        userId:
+          type: string
+        language:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    UserPreferences:
+      type: object
+      properties:
+        userId:
+          type: string
+        language:
+          type: string
+        theme:
+          type: string
+          enum: [light, dark]
+        notificationsEnabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+

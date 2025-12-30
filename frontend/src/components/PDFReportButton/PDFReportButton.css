@@ -1,0 +1,63 @@
+.pdf-report-button {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.pdf-generate-button,
+.pdf-download-button {
+  min-width: 200px;
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.pdf-generate-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pdf-loading-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--text-inverse);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-right: var(--spacing-sm);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pdf-error {
+  padding: var(--spacing-sm);
+  background-color: #fee2e2;
+  border: 1px solid var(--color-error);
+  border-radius: var(--border-radius-md);
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+}
+
+.pdf-error p {
+  margin-bottom: var(--spacing-xs);
+}
+
+.pdf-retry-button {
+  margin-top: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .pdf-generate-button,
+  .pdf-download-button {
+    width: 100%;
+  }
+}
+

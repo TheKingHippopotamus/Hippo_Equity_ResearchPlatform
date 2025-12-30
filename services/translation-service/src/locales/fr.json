@@ -1,0 +1,43 @@
+{
+  "ui": {
+    "dashboard": "Tableau de Bord",
+    "stockPrice": "Prix de l'Action",
+    "priceChange": "Variation du Prix",
+    "previousClose": "Clôture Précédente",
+    "news": "Actualités",
+    "financialAnalysis": "Analyse Financière",
+    "competitors": "Concurrents",
+    "financialHealth": "Santé Financière",
+    "growth": "Croissance",
+    "profitability": "Rentabilité",
+    "valuation": "Valorisation",
+    "shareholderReturns": "Rendements pour les Actionnaires",
+    "keyPoints": "Points Clés",
+    "summary": "Résumé",
+    "rating": "Note",
+    "industry": "Industrie",
+    "companyDescription": "Description de l'Entreprise",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "retry": "Réessayer",
+    "generateReport": "Générer un Rapport",
+    "downloadReport": "Télécharger le Rapport",
+    "selectLanguage": "Sélectionner la Langue",
+    "language": "Langue"
+  },
+  "metrics": {
+    "currentPrice": "Prix Actuel",
+    "priceChange": "Variation du Prix",
+    "priceChangePercent": "Variation du Prix %",
+    "previousClose": "Clôture Précédente",
+    "tradingDate": "Date de Négociation"
+  },
+  "sentiment": {
+    "veryNegative": "Très Négatif",
+    "negative": "Négatif",
+    "neutral": "Neutre",
+    "positive": "Positif",
+    "veryPositive": "Très Positif"
+  }
+}
+

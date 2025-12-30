@@ -1,0 +1,43 @@
+{
+  "ui": {
+    "dashboard": "仪表板",
+    "stockPrice": "股价",
+    "priceChange": "价格变化",
+    "previousClose": "前收盘价",
+    "news": "新闻",
+    "financialAnalysis": "财务分析",
+    "competitors": "竞争对手",
+    "financialHealth": "财务健康",
+    "growth": "增长",
+    "profitability": "盈利能力",
+    "valuation": "估值",
+    "shareholderReturns": "股东回报",
+    "keyPoints": "关键点",
+    "summary": "摘要",
+    "rating": "评级",
+    "industry": "行业",
+    "companyDescription": "公司描述",
+    "loading": "加载中...",
+    "error": "错误",
+    "retry": "重试",
+    "generateReport": "生成报告",
+    "downloadReport": "下载报告",
+    "selectLanguage": "选择语言",
+    "language": "语言"
+  },
+  "metrics": {
+    "currentPrice": "当前价格",
+    "priceChange": "价格变化",
+    "priceChangePercent": "价格变化 %",
+    "previousClose": "前收盘价",
+    "tradingDate": "交易日期"
+  },
+  "sentiment": {
+    "veryNegative": "非常负面",
+    "negative": "负面",
+    "neutral": "中性",
+    "positive": "正面",
+    "veryPositive": "非常正面"
+  }
+}
+

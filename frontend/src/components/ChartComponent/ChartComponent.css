@@ -1,0 +1,206 @@
+.chart-component {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  width: 100%;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--spacing-sm);
+  border-bottom: var(--border-width) solid var(--border-color);
+}
+
+.chart-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.chart-time-range {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.chart-container {
+  width: 100%;
+  height: 100%;
+}
+
+.chart-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chart-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.chart-range-button {
+  border: var(--border-width) solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+
+.chart-range-button.active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.chart-range-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.chart-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.chart-control input[type='text'] {
+  border: var(--border-width) solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: #fff;
+  color: var(--text-primary);
+  min-width: 180px;
+}
+
+.chart-control select {
+  border: var(--border-width) solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: #fff;
+  color: var(--text-primary);
+}
+
+.chart-control.checkbox {
+  gap: 4px;
+}
+
+.chart-fit-button {
+  border: var(--border-width) solid var(--border-color);
+  background: #fff;
+  color: var(--text-primary);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+
+.chart-fit-button:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.chart-advanced {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  background: var(--bg-primary);
+}
+
+.chart-advanced .chart-control {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.chart-advanced .chart-control.checkbox {
+  flex-direction: row;
+  align-items: center;
+}
+
+.chart-advanced-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.chart-advanced-title {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.chart-surface {
+  position: relative;
+  height: 420px;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--border-color);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  overflow: hidden;
+}
+
+.chart-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 600;
+  opacity: 0.5;
+  pointer-events: none;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.chart-x-axis-label,
+.chart-y-axis-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: var(--spacing-xs);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+  }
+
+  .chart-surface {
+    height: 360px;
+  }
+
+  .chart-control input[type='text'] {
+    min-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .chart-surface {
+    height: 300px;
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "ui": {
+    "dashboard": "לוח בקרה",
+    "stockPrice": "מחיר המניה",
+    "priceChange": "שינוי מחיר",
+    "previousClose": "סגירה קודמת",
+    "news": "חדשות",
+    "financialAnalysis": "ניתוח פיננסי",
+    "competitors": "מתחרים",
+    "financialHealth": "בריאות פיננסית",
+    "growth": "צמיחה",
+    "profitability": "רווחיות",
+    "valuation": "הערכה",
+    "shareholderReturns": "תשואות לבעלי מניות",
+    "keyPoints": "נקודות מפתח",
+    "summary": "סיכום",
+    "rating": "דירוג",
+    "industry": "תעשייה",
+    "companyDescription": "תיאור החברה",
+    "loading": "טוען...",
+    "error": "שגיאה",
+    "retry": "נסה שוב",
+    "generateReport": "צור דוח",
+    "downloadReport": "הורד דוח",
+    "selectLanguage": "בחר שפה",
+    "language": "שפה"
+  },
+  "metrics": {
+    "currentPrice": "מחיר נוכחי",
+    "priceChange": "שינוי מחיר",
+    "priceChangePercent": "שינוי מחיר %",
+    "previousClose": "סגירה קודמת",
+    "tradingDate": "תאריך מסחר"
+  },
+  "sentiment": {
+    "veryNegative": "שלילי מאוד",
+    "negative": "שלילי",
+    "neutral": "ניטרלי",
+    "positive": "חיובי",
+    "veryPositive": "חיובי מאוד"
+  }
+}
+
