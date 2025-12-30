@@ -1,5 +1,8 @@
 import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import logger from './src/utils/logger.js';
 import redisClient from './src/config/redis.js';
 import postgresClient from './src/config/postgres.js';
@@ -7,7 +10,17 @@ import persistenceService from './src/services/persistenceService.js';
 import dataService from './src/services/dataService.js';
 
 // Load environment variables
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envCandidates = [
+  path.resolve(__dirname, '../..', '.env'),
+  path.resolve(__dirname, '../../..', '.env'),
+];
+const envPath = envCandidates.find((candidate) => fs.existsSync(candidate));
+if (envPath) {
+  dotenv.config({ path: envPath });
+} else {
+  dotenv.config();
+}
 
 const app: Express = express();
 const PORT = process.env.PORT || 3001;
@@ -186,4 +199,3 @@ process.on('SIGINT', async () => {
 startServer();
 
 export default app;
-

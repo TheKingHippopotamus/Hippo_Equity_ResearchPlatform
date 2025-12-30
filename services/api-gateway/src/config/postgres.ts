@@ -11,12 +11,20 @@ class PostgresClient {
         return this.pool;
       }
 
+      const requireEnv = (key: string): string => {
+        const value = process.env[key];
+        if (!value) {
+          throw new Error(`Missing required environment variable: ${key}`);
+        }
+        return value;
+      };
+
       this.pool = new Pool({
         host: process.env.POSTGRES_HOST || 'postgres',
         port: parseInt(process.env.POSTGRES_PORT || '5432', 10),
-        database: process.env.POSTGRES_DB || 'hippo_db',
-        user: process.env.POSTGRES_USER || 'hippo_user',
-        password: process.env.POSTGRES_PASSWORD || 'hippo_password',
+        database: requireEnv('POSTGRES_DB'),
+        user: requireEnv('POSTGRES_USER'),
+        password: requireEnv('POSTGRES_PASSWORD'),
         max: 20,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 2000,
@@ -83,4 +91,3 @@ class PostgresClient {
 const postgresClient = new PostgresClient();
 
 export default postgresClient;
-

@@ -31,6 +31,13 @@ npm run dev
 
 The application will be available at `http://localhost:5173`
 
+## Environment
+
+The frontend reads Vite environment variables from the repo root `.env` or the shell.
+
+- `VITE_API_BASE_URL` (default: `/api`) - Base URL for API requests
+- `VITE_API_PROXY_TARGET` (default: `http://localhost:3000`) - Dev server proxy target
+
 ## Build
 
 ```bash
@@ -140,8 +147,4 @@ Property-based tests using fast-check for:
 - Firefox (latest)
 - Safari (latest)
 - Edge (latest)
-
-## License
-
-Proprietary - All rights reserved
 

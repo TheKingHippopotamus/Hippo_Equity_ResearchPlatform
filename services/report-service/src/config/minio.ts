@@ -1,6 +1,22 @@
 import { Client } from 'minio';
 import logger from '../utils/logger.js';
 
+const requireEnv = (key: string): string => {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+  return value;
+};
+
+const requireEitherEnv = (primary: string, secondary: string): string => {
+  const value = process.env[primary] || process.env[secondary];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${primary} or ${secondary}`);
+  }
+  return value;
+};
+
 class MinioClient {
   private client: Client | null = null;
   private bucketName: string = 'reports';
@@ -12,8 +28,8 @@ class MinioClient {
         endPoint: process.env.MINIO_ENDPOINT || 'minio',
         port: parseInt(process.env.MINIO_PORT || '9000', 10),
         useSSL: false,
-        accessKey: process.env.MINIO_ACCESS_KEY || 'minioadmin',
-        secretKey: process.env.MINIO_SECRET_KEY || 'minioadmin123',
+        accessKey: requireEitherEnv('MINIO_ACCESS_KEY', 'MINIO_ROOT_USER'),
+        secretKey: requireEitherEnv('MINIO_SECRET_KEY', 'MINIO_ROOT_PASSWORD'),
       });
 
       // Ensure bucket exists
@@ -64,4 +80,3 @@ class MinioClient {
 const minioClient = new MinioClient();
 
 export default minioClient;
-

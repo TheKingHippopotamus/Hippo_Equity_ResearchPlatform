@@ -1,4 +1,8 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -15,6 +19,18 @@ import postgresClient from './src/config/postgres.js';
 import { enforceHTTPS, validateAPIKey, sessionMiddleware } from './src/middleware/security.js';
 import validators from './src/middleware/validators.js';
 import { setupSwaggerRoutes } from './src/routes/swagger.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envCandidates = [
+  path.resolve(__dirname, '../..', '.env'),
+  path.resolve(__dirname, '../../..', '.env'),
+];
+const envPath = envCandidates.find((candidate) => fs.existsSync(candidate));
+if (envPath) {
+  dotenv.config({ path: envPath });
+} else {
+  dotenv.config();
+}
 
 const app: Express = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);

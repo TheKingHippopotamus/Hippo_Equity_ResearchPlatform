@@ -12,3 +12,8 @@ logs/
 coverage/
 .nyc_output/
 
+docker/ssl/
+
+apache/ssl/
+
+.plan/

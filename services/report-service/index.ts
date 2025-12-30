@@ -1,5 +1,8 @@
 import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import logger from './src/utils/logger.js';
 import postgresClient from './src/config/postgres.js';
 import minioClient from './src/config/minio.js';
@@ -10,7 +13,17 @@ import reportQueueConsumer from './src/services/reportQueueConsumer.js';
 import { SupportedLanguage } from './src/types/models.js';
 
 // Load environment variables
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envCandidates = [
+  path.resolve(__dirname, '../..', '.env'),
+  path.resolve(__dirname, '../../..', '.env'),
+];
+const envPath = envCandidates.find((candidate) => fs.existsSync(candidate));
+if (envPath) {
+  dotenv.config({ path: envPath });
+} else {
+  dotenv.config();
+}
 
 const app: Express = express();
 const PORT = process.env.PORT || 3003;

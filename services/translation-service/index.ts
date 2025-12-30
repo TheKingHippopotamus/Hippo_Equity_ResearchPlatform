@@ -1,10 +1,23 @@
 import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import logger from './src/utils/logger.js';
 import translationService, { SUPPORTED_LANGUAGES } from './src/services/translationService.js';
 
 // Load environment variables
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envCandidates = [
+  path.resolve(__dirname, '../..', '.env'),
+  path.resolve(__dirname, '../../..', '.env'),
+];
+const envPath = envCandidates.find((candidate) => fs.existsSync(candidate));
+if (envPath) {
+  dotenv.config({ path: envPath });
+} else {
+  dotenv.config();
+}
 
 const app: Express = express();
 const PORT = parseInt(process.env.PORT || '3004', 10);
@@ -149,4 +162,3 @@ app.listen(PORT, () => {
 });
 
 export default app;
-

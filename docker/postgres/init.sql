@@ -14,9 +14,12 @@ CREATE SCHEMA IF NOT EXISTS user_preferences;
 CREATE SCHEMA IF NOT EXISTS reports_metadata;
 
 -- Grant permissions
-GRANT ALL PRIVILEGES ON SCHEMA stock_data TO hippo_user;
-GRANT ALL PRIVILEGES ON SCHEMA user_preferences TO hippo_user;
-GRANT ALL PRIVILEGES ON SCHEMA reports_metadata TO hippo_user;
+DO $$
+BEGIN
+    EXECUTE format('GRANT ALL PRIVILEGES ON SCHEMA stock_data TO %I', current_user);
+    EXECUTE format('GRANT ALL PRIVILEGES ON SCHEMA user_preferences TO %I', current_user);
+    EXECUTE format('GRANT ALL PRIVILEGES ON SCHEMA reports_metadata TO %I', current_user);
+END $$;
 
 -- Run migrations
 -- Note: In production, use a proper migration tool like Flyway or Alembic
@@ -28,4 +31,3 @@ BEGIN
         \i /docker-entrypoint-initdb.d/migrations/001_initial_schema.sql
     END IF;
 END $$;
-

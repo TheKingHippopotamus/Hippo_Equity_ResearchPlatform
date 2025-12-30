@@ -5,18 +5,30 @@
 
 set -e
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+ENV_FILE="$REPO_ROOT/.env"
+COMPOSE_FILE="$REPO_ROOT/docker-compose.yml"
+
 echo "🔍 Hippo Equity Research App - Health Check"
 echo "==========================================="
 echo ""
 
+# Load environment variables if available
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    . "$ENV_FILE"
+    set +a
+fi
+
 # Check Docker containers
 echo "📦 Checking Docker containers..."
-if docker-compose ps | grep -q "Up"; then
+if docker-compose -f "$COMPOSE_FILE" ps | grep -q "Up"; then
     echo "✅ Docker containers are running"
-    docker-compose ps
+    docker-compose -f "$COMPOSE_FILE" ps
 else
     echo "❌ Some Docker containers are not running"
-    docker-compose ps
+    docker-compose -f "$COMPOSE_FILE" ps
     exit 1
 fi
 
@@ -70,17 +82,29 @@ echo ""
 # Check infrastructure services
 echo "🔧 Checking infrastructure services..."
 echo -n "   PostgreSQL: "
-if docker exec hippo-postgres pg_isready -U hippo_user > /dev/null 2>&1; then
-    echo "✅ Ready"
+if [ -z "${POSTGRES_USER}" ]; then
+    echo "⚠️  POSTGRES_USER not set"
 else
-    echo "❌ Not ready"
+    if docker exec hippo-postgres pg_isready -U "${POSTGRES_USER}" > /dev/null 2>&1; then
+        echo "✅ Ready"
+    else
+        echo "❌ Not ready"
+    fi
 fi
 
 echo -n "   Redis: "
-if docker exec hippo-redis redis-cli --raw incr ping > /dev/null 2>&1; then
-    echo "✅ Ready"
+if [ -n "${REDIS_PASSWORD}" ]; then
+    if docker exec hippo-redis redis-cli -a "${REDIS_PASSWORD}" --raw incr ping > /dev/null 2>&1; then
+        echo "✅ Ready"
+    else
+        echo "❌ Not ready"
+    fi
 else
-    echo "❌ Not ready"
+    if docker exec hippo-redis redis-cli --raw incr ping > /dev/null 2>&1; then
+        echo "✅ Ready"
+    else
+        echo "❌ Not ready"
+    fi
 fi
 
 echo -n "   Kafka: "
@@ -100,4 +124,3 @@ fi
 echo ""
 echo "✅ Health check complete!"
 echo ""
-

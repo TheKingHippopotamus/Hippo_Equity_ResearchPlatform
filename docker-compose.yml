@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   # Apache Reverse Proxy
@@ -24,9 +23,9 @@ services:
     image: postgres:15-alpine
     container_name: hippo-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-hippo_db}
-      POSTGRES_USER: ${POSTGRES_USER:-hippo_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hippo_password}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -37,7 +36,7 @@ services:
       - hippo-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hippo_user} -d ${POSTGRES_DB:-hippo_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -46,7 +45,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: hippo-redis
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     ports:
@@ -55,7 +56,7 @@ services:
       - hippo-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --raw incr ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -104,8 +105,8 @@ services:
     container_name: hippo-minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
     ports:
@@ -131,7 +132,7 @@ services:
       - PORT=${API_GATEWAY_PORT:-3000}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     ports:
       - "3000:3000"
     depends_on:
@@ -152,18 +153,20 @@ services:
       - PORT=${DATA_SERVICE_PORT:-3001}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB:-hippo_db}
-      - POSTGRES_USER=${POSTGRES_USER:-hippo_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hippo_password}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - DATA_PROVIDER_API_URL=${DATA_PROVIDER_API_URL:-https://provider.example}
       - TRANSLATION_SERVICE_URL=http://translation-service:3004
     depends_on:
       - redis
       - postgres
       - translation-service
+    ports:
+      - "3001:3001"
     networks:
       - hippo-network
     restart: unless-stopped
@@ -179,12 +182,12 @@ services:
       - KAFKA_BROKER=kafka:29092
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB:-hippo_db}
-      - POSTGRES_USER=${POSTGRES_USER:-hippo_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hippo_password}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     depends_on:
       - kafka
       - redis
@@ -205,13 +208,13 @@ services:
       - PORT=${REPORT_SERVICE_PORT:-3003}
       - MINIO_ENDPOINT=minio
       - MINIO_PORT=9000
-      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB:-hippo_db}
-      - POSTGRES_USER=${POSTGRES_USER:-hippo_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hippo_password}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - KAFKA_BROKER=kafka:29092
       - DATA_SERVICE_URL=http://data-service:3001
       - TRANSLATION_SERVICE_URL=http://translation-service:3004
@@ -221,6 +224,8 @@ services:
       - kafka
       - data-service
       - translation-service
+    ports:
+      - "3003:3003"
     networks:
       - hippo-network
     restart: unless-stopped
@@ -234,6 +239,8 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=${TRANSLATION_SERVICE_PORT:-3004}
+    ports:
+      - "3004:3004"
     networks:
       - hippo-network
     restart: unless-stopped
@@ -249,15 +256,17 @@ services:
       - PORT=${USER_SERVICE_PORT:-3005}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB:-hippo_db}
-      - POSTGRES_USER=${POSTGRES_USER:-hippo_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hippo_password}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     depends_on:
       - redis
       - postgres
+    ports:
+      - "3005:3005"
     networks:
       - hippo-network
     restart: unless-stopped

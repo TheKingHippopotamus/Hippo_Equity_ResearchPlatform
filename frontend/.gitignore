@@ -27,3 +27,8 @@ dist-ssr
 coverage
 .nyc_output
 
+.plan/  
+
+docker/ssl/
+
+apache/ssl/

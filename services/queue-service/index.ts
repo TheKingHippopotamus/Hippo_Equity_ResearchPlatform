@@ -1,10 +1,25 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import kafkaClient from './src/config/kafka.js';
 import { initializeTopics } from './src/config/kafka-topics.js';
 import logger from './src/utils/logger.js';
 import queueService from './src/services/queueService.js';
 import redisClient from './src/config/redis.js';
 import { startServer } from './src/api/server.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envCandidates = [
+  path.resolve(__dirname, '../..', '.env'),
+  path.resolve(__dirname, '../../..', '.env'),
+];
+const envPath = envCandidates.find((candidate) => fs.existsSync(candidate));
+if (envPath) {
+  dotenv.config({ path: envPath });
+} else {
+  dotenv.config();
+}
 
 const PORT = parseInt(process.env.PORT || '3002', 10);
 
@@ -68,4 +83,3 @@ startQueueService().catch((error) => {
 
 export { startQueueService };
 export { default as queueService } from './src/services/queueService.js';
-

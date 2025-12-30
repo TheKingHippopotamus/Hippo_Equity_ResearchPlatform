@@ -220,8 +220,14 @@ npm run dev
 curl http://localhost:3000/api/health
 ```
 
+
 ```bash
 curl http://localhost:3000/api/data/stock/AAPL?language=en
+```
+
+## Clean Docker Cache 
+```bash
+docker builder prune -af
 ```
 
 ---

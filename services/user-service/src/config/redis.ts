@@ -12,6 +12,14 @@ class RedisClient {
 
   async connect(): Promise<ReturnType<typeof createClient>> {
     try {
+      const requireEnv = (key: string): string => {
+        const value = process.env[key];
+        if (!value) {
+          throw new Error(`Missing required environment variable: ${key}`);
+        }
+        return value;
+      };
+
       const config = {
         socket: {
           host: process.env.REDIS_HOST || 'redis',
@@ -24,7 +32,7 @@ class RedisClient {
             return Math.min(retries * 50, 1000);
           }
         },
-        password: process.env.REDIS_PASSWORD || 'redis_password'
+        password: requireEnv('REDIS_PASSWORD')
       };
 
       this.client = createClient(config);
@@ -89,4 +97,3 @@ class RedisClient {
 const redisClient = new RedisClient();
 
 export default redisClient;
-

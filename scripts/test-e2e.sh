@@ -5,6 +5,10 @@
 
 set -e
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+COMPOSE_FILE="$REPO_ROOT/docker-compose.yml"
+
 echo "🧪 Hippo Equity Research App - End-to-End Test"
 echo "=============================================="
 echo ""
@@ -46,7 +50,7 @@ test_endpoint() {
 
 # Check if services are running
 echo "🔍 Checking if services are running..."
-if ! docker-compose ps | grep -q "Up"; then
+if ! docker-compose -f "$COMPOSE_FILE" ps | grep -q "Up"; then
     echo -e "${RED}❌ Services are not running. Please start them first with ./scripts/start.sh${NC}"
     exit 1
 fi
@@ -119,4 +123,3 @@ echo "   - Frontend: http://localhost:5173"
 echo "   - API Documentation: http://localhost:3000/api-docs"
 echo "   - Health Check: http://localhost:3000/health"
 echo ""
-

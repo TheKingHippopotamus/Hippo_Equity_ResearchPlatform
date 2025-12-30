@@ -17,18 +17,16 @@ RUN sed -i \
 # Create SSL directory
 RUN mkdir -p /usr/local/apache2/conf/ssl
 
-# Generate self-signed certificate for development (replace with real certs in production)
-RUN openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout /usr/local/apache2/conf/ssl/server.key \
-    -out /usr/local/apache2/conf/ssl/server.crt \
-    -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
-
 # Copy custom configuration
 COPY httpd.conf /usr/local/apache2/conf/httpd.conf
+
+# Copy entrypoint to generate SSL certs at runtime if missing
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Expose ports
 EXPOSE 80 443
 
 # Start Apache
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["httpd", "-D", "FOREGROUND"]
-

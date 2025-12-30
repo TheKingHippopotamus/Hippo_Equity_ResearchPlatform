@@ -38,9 +38,12 @@ CREATE INDEX IF NOT EXISTS idx_error_logs_user_id ON error_logging.error_logs(us
 CREATE INDEX IF NOT EXISTS idx_error_logs_ip_address ON error_logging.error_logs(ip_address);
 
 -- Grant permissions
-GRANT ALL PRIVILEGES ON SCHEMA error_logging TO hippo_user;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA error_logging TO hippo_user;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA error_logging TO hippo_user;
+DO $$
+BEGIN
+    EXECUTE format('GRANT ALL PRIVILEGES ON SCHEMA error_logging TO %I', current_user);
+    EXECUTE format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA error_logging TO %I', current_user);
+    EXECUTE format('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA error_logging TO %I', current_user);
+END $$;
 
 -- Function to automatically clean up old error logs (older than 90 days)
 CREATE OR REPLACE FUNCTION error_logging.cleanup_old_logs()
@@ -61,4 +64,3 @@ $$ LANGUAGE plpgsql;
 COMMENT ON TABLE error_logging.error_logs IS 'Stores application errors for monitoring and debugging';
 COMMENT ON COLUMN error_logging.error_logs.severity IS 'Error severity: error, warning, or critical';
 COMMENT ON COLUMN error_logging.error_logs.resolved IS 'Whether the error has been resolved or acknowledged';
-
