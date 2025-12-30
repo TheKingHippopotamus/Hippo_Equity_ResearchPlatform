@@ -3,31 +3,73 @@
   flex-direction: column;
   gap: var(--spacing-md);
   width: 100%;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #ffffff 0%, #f7fafc 45%, #eef2f7 100%);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 30px -24px rgba(15, 23, 42, 0.5);
+  --chart-accent: #0ea5e9;
+  --chart-accent-strong: #0284c7;
+  --chart-accent-soft: rgba(14, 165, 233, 0.12);
+  --chart-ink: #0f172a;
+  --chart-muted: #475569;
+  --chart-border: rgba(15, 23, 42, 0.12);
+  --chart-glow: rgba(14, 165, 233, 0.2);
+  animation: chart-rise 380ms ease-out;
+}
+
+.chart-component::before {
+  content: '';
+  position: absolute;
+  inset: -30% 0 auto 0;
+  height: 60%;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(14, 165, 233, 0.2), transparent 55%),
+    radial-gradient(circle at 85% 0%, rgba(16, 185, 129, 0.18), transparent 60%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.chart-component > * {
+  position: relative;
+  z-index: 1;
 }
 
 .chart-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: var(--spacing-sm);
-  border-bottom: var(--border-width) solid var(--border-color);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-lg);
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 .chart-title {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-xl);
   font-weight: var(--font-weight-semibold);
-  color: var(--text-primary);
+  color: var(--chart-ink);
   margin: 0;
+  letter-spacing: 0.01em;
 }
 
 .chart-time-range {
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  color: var(--chart-muted);
+  background: rgba(15, 23, 42, 0.06);
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .chart-container {
   width: 100%;
   height: 100%;
+  border-radius: calc(var(--border-radius-lg) - 2px);
+  overflow: hidden;
 }
 
 .chart-toolbar {
@@ -36,6 +78,12 @@
   gap: var(--spacing-sm);
   align-items: center;
   justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-lg);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(8px);
 }
 
 .chart-range {
@@ -45,19 +93,22 @@
 }
 
 .chart-range-button {
-  border: var(--border-width) solid var(--border-color);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  padding: 4px 10px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--chart-muted);
+  padding: 6px 12px;
   border-radius: 999px;
   font-size: var(--font-size-xs);
   cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), color var(--transition-fast);
 }
 
 .chart-range-button.active {
-  background: var(--color-primary);
+  background: linear-gradient(135deg, var(--chart-accent) 0%, var(--chart-accent-strong) 100%);
   color: #fff;
-  border-color: var(--color-primary);
+  border-color: transparent;
+  box-shadow: 0 8px 16px -12px var(--chart-accent-strong);
 }
 
 .chart-range-button:disabled {
@@ -77,24 +128,26 @@
   align-items: center;
   gap: 6px;
   font-size: var(--font-size-xs);
-  color: var(--text-secondary);
+  color: var(--chart-muted);
 }
 
 .chart-control input[type='text'] {
-  border: var(--border-width) solid var(--border-color);
-  border-radius: 6px;
-  padding: 4px 8px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  padding: 6px 10px;
   background: #fff;
-  color: var(--text-primary);
+  color: var(--chart-ink);
   min-width: 180px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8);
 }
 
 .chart-control select {
-  border: var(--border-width) solid var(--border-color);
-  border-radius: 6px;
-  padding: 4px 8px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  padding: 6px 10px;
   background: #fff;
-  color: var(--text-primary);
+  color: var(--chart-ink);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8);
 }
 
 .chart-control.checkbox {
@@ -102,18 +155,21 @@
 }
 
 .chart-fit-button {
-  border: var(--border-width) solid var(--border-color);
+  border: 1px solid rgba(15, 23, 42, 0.12);
   background: #fff;
-  color: var(--text-primary);
-  padding: 4px 10px;
-  border-radius: 6px;
+  color: var(--chart-ink);
+  padding: 6px 12px;
+  border-radius: 999px;
   font-size: var(--font-size-xs);
   cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), color var(--transition-fast);
 }
 
 .chart-fit-button:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: var(--chart-accent-strong);
+  color: var(--chart-accent-strong);
+  box-shadow: 0 10px 18px -16px var(--chart-accent-strong);
+  transform: translateY(-1px);
 }
 
 .chart-advanced {
@@ -121,9 +177,10 @@
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--spacing-md);
   padding: var(--spacing-md);
-  border: var(--border-width) solid var(--border-color);
+  border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: var(--border-radius-lg);
-  background: var(--bg-primary);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.9));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
 }
 
 .chart-advanced .chart-control {
@@ -147,7 +204,7 @@
   font-size: var(--font-size-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-tertiary);
+  color: rgba(71, 85, 105, 0.8);
   margin: 0;
 }
 
@@ -155,9 +212,23 @@
   position: relative;
   height: 420px;
   border-radius: var(--border-radius-lg);
-  border: 1px solid var(--border-color);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background:
+    radial-gradient(circle at 20% 0%, rgba(14, 165, 233, 0.12), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
   overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), var(--shadow-md);
+}
+
+.chart-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(15, 23, 42, 0.04) 0, rgba(15, 23, 42, 0.04) 1px, transparent 1px, transparent 60px),
+    repeating-linear-gradient(180deg, rgba(15, 23, 42, 0.04) 0, rgba(15, 23, 42, 0.04) 1px, transparent 1px, transparent 60px);
+  opacity: 0.35;
+  pointer-events: none;
 }
 
 .chart-watermark {
@@ -168,18 +239,21 @@
   justify-content: center;
   font-size: 28px;
   font-weight: 600;
-  opacity: 0.5;
+  opacity: 0.6;
   pointer-events: none;
   text-transform: uppercase;
   letter-spacing: 2px;
+  z-index: 2;
 }
 
 .chart-x-axis-label,
 .chart-y-axis-label {
   font-size: var(--font-size-xs);
-  color: var(--text-secondary);
+  color: var(--chart-muted);
   text-align: center;
   margin-top: var(--spacing-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 /* Responsive */
@@ -202,5 +276,16 @@
 @media (max-width: 480px) {
   .chart-surface {
     height: 300px;
+  }
+}
+
+@keyframes chart-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
