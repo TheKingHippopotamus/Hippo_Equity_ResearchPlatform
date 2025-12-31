@@ -4,6 +4,7 @@ import {
   ColorType,
   LineSeries,
   AreaSeries,
+  BaselineSeries,
   HistogramSeries,
   createSeriesMarkers,
   LineStyle,
@@ -20,8 +21,9 @@ import {
 } from 'lightweight-charts';
 import './ChartComponent.css';
 
-export type ChartType = 'line' | 'bar' | 'area';
+export type ChartType = 'line' | 'bar' | 'area' | 'baseline' | 'dots';
 type TimeframeId = '1W' | '1M' | '3M' | '6M' | '1Y' | 'ALL';
+type BaselineSource = 'zero' | 'first' | 'last' | 'average' | 'median';
 
 export interface ChartDataPoint {
   date: string;
@@ -74,6 +76,18 @@ const applyAlpha = (input: string, alpha: number) => {
     }
   }
   return input;
+};
+
+const medianValue = (values: number[]) => {
+  if (values.length === 0) {
+    return 0;
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+  return sorted[middle];
 };
 
 const toIsoDate = (input: Time) => {
@@ -186,9 +200,19 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
       ? getComputedStyle(document.body).getPropertyValue('--color-primary').trim()
       : '') ||
     '#0f766e';
+  const positiveColor =
+    (typeof window !== 'undefined'
+      ? getComputedStyle(document.body).getPropertyValue('--color-success').trim()
+      : '') || '#16a34a';
+  const negativeColor =
+    (typeof window !== 'undefined'
+      ? getComputedStyle(document.body).getPropertyValue('--color-error').trim()
+      : '') || '#dc2626';
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<'Line'> | ISeriesApi<'Area'> | ISeriesApi<'Histogram'> | null>(null);
+  const seriesRef = useRef<
+    ISeriesApi<'Line'> | ISeriesApi<'Area'> | ISeriesApi<'Histogram'> | ISeriesApi<'Baseline'> | null
+  >(null);
   const markerPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
@@ -208,6 +232,8 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
   const [showMarkers, setShowMarkers] = useState(false);
   const [markerRadius, setMarkerRadius] = useState(4);
   const [areaOpacity, setAreaOpacity] = useState(0.2);
+  const [baselineSource, setBaselineSource] = useState<BaselineSource>('last');
+  const [baselineRelativeGradient, setBaselineRelativeGradient] = useState(false);
   const [showPriceLine, setShowPriceLine] = useState(true);
   const [showLastValue, setShowLastValue] = useState(true);
   const [priceLineStyle, setPriceLineStyle] = useState<LineStyle>(LineStyle.Dashed);
@@ -284,6 +310,30 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
       end: filteredSeriesData[filteredSeriesData.length - 1].time,
     };
   }, [filteredSeriesData]);
+
+  const baselineValue = useMemo(() => {
+    if (filteredSeriesData.length === 0) {
+      return 0;
+    }
+    const values = filteredSeriesData.map((point) => point.value).filter((value) => Number.isFinite(value));
+    if (values.length === 0) {
+      return 0;
+    }
+
+    switch (baselineSource) {
+      case 'zero':
+        return 0;
+      case 'first':
+        return values[0];
+      case 'average':
+        return values.reduce((sum, value) => sum + value, 0) / values.length;
+      case 'median':
+        return medianValue(values);
+      case 'last':
+      default:
+        return values[values.length - 1];
+    }
+  }, [baselineSource, filteredSeriesData]);
 
   const newsByDate = useMemo(() => {
     const map = new Map<string, ChartNewsItem[]>();
@@ -411,8 +461,9 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
       chart.removeSeries(seriesRef.current);
     }
 
-    let series: ISeriesApi<'Line'> | ISeriesApi<'Area'> | ISeriesApi<'Histogram'>;
+    let series: ISeriesApi<'Line'> | ISeriesApi<'Area'> | ISeriesApi<'Histogram'> | ISeriesApi<'Baseline'>;
     const scaleId = priceScaleSide === 'left' ? 'left' : 'right';
+    const isDotSeries = activeType === 'dots';
 
     if (activeType === 'area') {
       series = chart.addSeries(AreaSeries, {
@@ -422,8 +473,9 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
         lineWidth,
         lineStyle,
         lineType,
-        pointMarkersVisible: showMarkers,
-        pointMarkersRadius: showMarkers ? markerRadius : undefined,
+        lineVisible: !isDotSeries,
+        pointMarkersVisible: isDotSeries ? true : showMarkers,
+        pointMarkersRadius: isDotSeries || showMarkers ? markerRadius : undefined,
         lastPriceAnimation,
         priceScaleId: scaleId,
         priceLineVisible: showPriceLine,
@@ -441,14 +493,38 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
         priceLineSource,
         lastValueVisible: showLastValue,
       });
+    } else if (activeType === 'baseline') {
+      series = chart.addSeries(BaselineSeries, {
+        baseValue: { type: 'price', price: baselineValue },
+        relativeGradient: baselineRelativeGradient,
+        topLineColor: positiveColor,
+        topFillColor1: applyAlpha(positiveColor, Math.min(0.6, areaOpacity + 0.2)),
+        topFillColor2: applyAlpha(positiveColor, 0.08),
+        bottomLineColor: negativeColor,
+        bottomFillColor1: applyAlpha(negativeColor, 0.08),
+        bottomFillColor2: applyAlpha(negativeColor, Math.min(0.6, areaOpacity + 0.2)),
+        lineWidth,
+        lineStyle,
+        lineType,
+        lineVisible: !isDotSeries,
+        pointMarkersVisible: isDotSeries ? true : showMarkers,
+        pointMarkersRadius: isDotSeries || showMarkers ? markerRadius : undefined,
+        lastPriceAnimation,
+        priceScaleId: scaleId,
+        priceLineVisible: showPriceLine,
+        priceLineStyle,
+        priceLineSource,
+        lastValueVisible: showLastValue,
+      });
     } else {
       series = chart.addSeries(LineSeries, {
         color: resolvedColor,
         lineWidth,
         lineStyle,
         lineType,
-        pointMarkersVisible: showMarkers,
-        pointMarkersRadius: showMarkers ? markerRadius : undefined,
+        lineVisible: !isDotSeries,
+        pointMarkersVisible: isDotSeries ? true : showMarkers,
+        pointMarkersRadius: isDotSeries || showMarkers ? markerRadius : undefined,
         lastPriceAnimation,
         priceScaleId: scaleId,
         priceLineVisible: showPriceLine,
@@ -474,6 +550,10 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
     showLastValue,
     showMarkers,
     showPriceLine,
+    baselineRelativeGradient,
+    baselineValue,
+    negativeColor,
+    positiveColor,
   ]);
 
   useEffect(() => {
@@ -622,6 +702,10 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
       priceLineSource,
       lastValueVisible: showLastValue,
     };
+    const isDotSeries = activeType === 'dots';
+    const markerVisible = isDotSeries ? true : showMarkers;
+    const markerSize = markerVisible ? markerRadius : undefined;
+
     if (activeType === 'bar') {
       seriesRef.current.applyOptions(baseOptions);
     } else {
@@ -630,18 +714,29 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
         lineWidth,
         lineStyle,
         lineType,
-        pointMarkersVisible: showMarkers,
-        pointMarkersRadius: showMarkers ? markerRadius : undefined,
+        lineVisible: !isDotSeries,
+        pointMarkersVisible: markerVisible,
+        pointMarkersRadius: markerSize,
         lastPriceAnimation,
       });
-      if (activeType === 'area') {
+      if (activeType === 'baseline') {
+        seriesRef.current.applyOptions({
+          baseValue: { type: 'price', price: baselineValue },
+          relativeGradient: baselineRelativeGradient,
+          topLineColor: positiveColor,
+          topFillColor1: applyAlpha(positiveColor, Math.min(0.6, areaOpacity + 0.2)),
+          topFillColor2: applyAlpha(positiveColor, 0.08),
+          bottomLineColor: negativeColor,
+          bottomFillColor1: applyAlpha(negativeColor, 0.08),
+          bottomFillColor2: applyAlpha(negativeColor, Math.min(0.6, areaOpacity + 0.2)),
+        });
+      } else if (activeType === 'area') {
         seriesRef.current.applyOptions({
           lineColor: resolvedColor,
           topColor: applyAlpha(resolvedColor, areaOpacity),
           bottomColor: applyAlpha(resolvedColor, areaOpacity * 0.35),
         });
-      }
-      if (activeType === 'line') {
+      } else {
         seriesRef.current.applyOptions({ color: resolvedColor });
       }
     }
@@ -657,6 +752,10 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
     priceLineSource,
     priceLineStyle,
     priceScaleSide,
+    baselineRelativeGradient,
+    baselineValue,
+    negativeColor,
+    positiveColor,
     showLastValue,
     showMarkers,
     showPriceLine,
@@ -715,6 +814,8 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
               <option value="line">Line</option>
               <option value="area">Area</option>
               <option value="bar">Bar</option>
+              <option value="baseline">Baseline</option>
+              <option value="dots">Dots</option>
             </select>
           </label>
           <label className="chart-control">
@@ -935,7 +1036,7 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
                 type="checkbox"
                 checked={showMarkers}
                 onChange={(event) => setShowMarkers(event.target.checked)}
-                disabled={activeType === 'bar'}
+                disabled={activeType === 'bar' || activeType === 'dots'}
               />
               <span>Markers</span>
             </label>
@@ -948,7 +1049,7 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
                 step={1}
                 value={markerRadius}
                 onChange={(event) => setMarkerRadius(Number(event.target.value))}
-                disabled={!showMarkers || activeType === 'bar'}
+                disabled={(activeType !== 'dots' && !showMarkers) || activeType === 'bar'}
               />
               <span className="chart-range-value">{markerRadius}px</span>
             </label>
@@ -979,6 +1080,31 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
                 />
                 <span className="chart-range-value">{Math.round(areaOpacity * 100)}%</span>
               </label>
+            )}
+            {activeType === 'baseline' && (
+              <>
+                <label className="chart-control">
+                  <span>Baseline</span>
+                  <select
+                    value={baselineSource}
+                    onChange={(event) => setBaselineSource(event.target.value as BaselineSource)}
+                  >
+                    <option value="last">Last value</option>
+                    <option value="first">First value</option>
+                    <option value="average">Average</option>
+                    <option value="median">Median</option>
+                    <option value="zero">Zero</option>
+                  </select>
+                </label>
+                <label className="chart-control checkbox">
+                  <input
+                    type="checkbox"
+                    checked={baselineRelativeGradient}
+                    onChange={(event) => setBaselineRelativeGradient(event.target.checked)}
+                  />
+                  <span>Relative gradient</span>
+                </label>
+              </>
             )}
           </div>
 

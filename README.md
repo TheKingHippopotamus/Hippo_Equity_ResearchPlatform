@@ -1,5 +1,11 @@
 # Hippo Equity Research Platform
 
+![Real-World Project](https://img.shields.io/badge/real--world-project-0f766e?style=for-the-badge)
+![Architecture: Microservices](https://img.shields.io/badge/architecture-microservices-1f2933?style=for-the-badge)
+![Dockerized](https://img.shields.io/badge/deployment-dockerized-0ea5a4?style=for-the-badge)
+![TypeScript](https://img.shields.io/badge/stack-typescript-2563eb?style=for-the-badge)
+![React](https://img.shields.io/badge/frontend-react-14b8a6?style=for-the-badge)
+
 Hippo Equity Research is a production-ready, microservices-based platform for
 equity research workflows. It ingests market data, normalizes and caches it,
 supports multi-language analysis, and delivers professional PDF reports through
@@ -394,4 +400,3 @@ use `docker-compose down -v` (this removes volumes).
 
 ### Hippo_Equity_ResearchPlatform 
 ## KING HIPPOPOTAMUS ! 
-

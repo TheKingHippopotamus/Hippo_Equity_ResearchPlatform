@@ -8,6 +8,7 @@ vi.mock('lightweight-charts', () => {
     ColorType: { Solid: 'solid' },
     LineSeries: {},
     AreaSeries: {},
+    BaselineSeries: {},
     HistogramSeries: {},
     LineStyle: { Solid: 0, Dotted: 1, Dashed: 2, LargeDashed: 3, SparseDotted: 4 },
     LineType: { Simple: 0, WithSteps: 1, Curved: 2 },
@@ -67,6 +68,13 @@ describe('ChartComponent', () => {
   it('renders area chart when type is area', () => {
     render(<ChartComponent data={mockData} type="area" />);
     
+    const chartContainer = document.querySelector('.chart-container');
+    expect(chartContainer).toBeInTheDocument();
+  });
+
+  it('renders baseline chart when type is baseline', () => {
+    render(<ChartComponent data={mockData} type="baseline" />);
+
     const chartContainer = document.querySelector('.chart-container');
     expect(chartContainer).toBeInTheDocument();
   });

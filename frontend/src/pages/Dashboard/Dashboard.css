@@ -198,12 +198,12 @@
 
 .dashboard-content {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    'stock stock'
-    'chart chart'
-    'news news'
-    'analysis analysis';
+    'stock'
+    'chart'
+    'news'
+    'analysis';
   gap: var(--spacing-2xl);
 }
 
@@ -232,6 +232,12 @@
   flex-direction: column;
   gap: var(--spacing-md);
   grid-area: stock;
+  align-items: flex-start;
+}
+
+.dashboard-stock-section .stock-card {
+  width: min(360px, 100%);
+  padding: var(--spacing-md);
 }
 
 .dashboard-actions {
@@ -242,6 +248,7 @@
 .dashboard-chart-section {
   width: 100%;
   grid-area: chart;
+  justify-self: stretch;
 }
 
 .dashboard-news-section {
