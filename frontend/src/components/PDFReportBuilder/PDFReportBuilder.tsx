@@ -1,9 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { PDFReportButton } from '../PDFReportButton/PDFReportButton';
 import type {
   ReportAnalysisSectionId,
   ReportChartType,
-  ReportConfig,
   ReportDesignConfig,
   ReportNewsMode,
   ReportPreset,
@@ -11,12 +9,15 @@ import type {
   ReportSectionId,
   SupportedLanguage,
 } from '../../types/models';
+import { PDFReportButton } from '../PDFReportButton/PDFReportButton';
 import './PDFReportBuilder.css';
 
 interface PDFReportBuilderProps {
   stockSymbol: string;
   language?: SupportedLanguage;
   userId?: string;
+  inline?: boolean;
+  defaultOpen?: boolean;
 }
 
 const SECTION_METADATA: Record<ReportSectionId, { title: string; description: string }> = {
@@ -136,15 +137,15 @@ const DEFAULT_SECTIONS: ReportSectionConfig[] = [
   },
 ];
 
-export const PDFReportBuilder: React.FC<PDFReportBuilderProps> = ({
-  stockSymbol,
-  language = 'en',
-  userId = 'anonymous',
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
+export const PDFReportBuilder: React.FC<PDFReportBuilderProps> = (props) => {
+  const { inline = false, defaultOpen = false, stockSymbol, language, userId } = props;
+  const [isOpen, setIsOpen] = useState(defaultOpen || inline);
   const [activeTab, setActiveTab] = useState<'content' | 'design' | 'review'>('content');
   const [sections, setSections] = useState<ReportSectionConfig[]>(DEFAULT_SECTIONS);
   const [design, setDesign] = useState<ReportDesignConfig>(PRESET_CONFIGS.classic);
+  const [draggedSectionId, setDraggedSectionId] = useState<ReportSectionId | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<ReportSectionId | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   const orderedSections = useMemo(
     () => [...sections].sort((a, b) => a.order - b.order),
@@ -155,12 +156,8 @@ export const PDFReportBuilder: React.FC<PDFReportBuilderProps> = ({
     () => orderedSections.filter((section) => section.enabled),
     [orderedSections]
   );
-
-  const reportConfig: ReportConfig = useMemo(
-    () => ({
-      sections: orderedSections,
-      design,
-    }),
+  const reportConfig = useMemo(
+    () => ({ sections: orderedSections, design }),
     [orderedSections, design]
   );
 
@@ -170,18 +167,52 @@ export const PDFReportBuilder: React.FC<PDFReportBuilderProps> = ({
     );
   };
 
-  const handleMoveSection = (id: ReportSectionId, direction: number) => {
+  const reorderSections = (sourceId: ReportSectionId, targetId: ReportSectionId) => {
     setSections((prev) => {
+      if (sourceId === targetId) {
+        return prev;
+      }
       const sorted = [...prev].sort((a, b) => a.order - b.order);
-      const index = sorted.findIndex((section) => section.id === id);
-      const targetIndex = index + direction;
-      if (index === -1 || targetIndex < 0 || targetIndex >= sorted.length) {
+      const sourceIndex = sorted.findIndex((section) => section.id === sourceId);
+      const targetIndex = sorted.findIndex((section) => section.id === targetId);
+      if (sourceIndex === -1 || targetIndex === -1) {
         return prev;
       }
       const next = [...sorted];
-      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      const [moved] = next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, moved);
       return next.map((section, idx) => ({ ...section, order: idx }));
     });
+  };
+
+  const handleDragStart = (id: ReportSectionId) => (event: React.DragEvent<HTMLButtonElement>) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', id);
+    setDraggedSectionId(id);
+  };
+
+  const handleDragOver = (id: ReportSectionId) => (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    if (dropTargetId !== id) {
+      setDropTargetId(id);
+    }
+  };
+
+  const handleDrop = (id: ReportSectionId) => (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const sourceId = event.dataTransfer.getData('text/plain') as ReportSectionId;
+    if (!sourceId) {
+      return;
+    }
+    reorderSections(sourceId, id);
+    setDraggedSectionId(null);
+    setDropTargetId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedSectionId(null);
+    setDropTargetId(null);
   };
 
   const updateSectionOptions = (
@@ -250,33 +281,36 @@ export const PDFReportBuilder: React.FC<PDFReportBuilderProps> = ({
   const estimatedPages = estimatePages();
 
   return (
-    <div className="pdf-builder">
-      <div className="pdf-builder-actions">
-        <PDFReportButton stockSymbol={stockSymbol} language={language} userId={userId} />
-        <button
-          type="button"
-          className="button button-secondary pdf-builder-open"
-          onClick={() => setIsOpen(true)}
-        >
-          Customize PDF
-        </button>
-      </div>
+    <div className={`pdf-builder ${inline ? 'pdf-builder-inline' : ''}`}>
+      {!inline && (
+        <div className="pdf-builder-actions">
+          <button
+            type="button"
+            className="button button-secondary pdf-builder-open"
+            onClick={() => setIsOpen(true)}
+          >
+            Customize PDF
+          </button>
+        </div>
+      )}
 
       {isOpen && (
-        <div className="pdf-builder-modal-backdrop" role="presentation">
-          <div className="pdf-builder-modal" role="dialog" aria-modal="true">
+        <div className={`${inline ? 'pdf-builder-inline-content' : 'pdf-builder-modal-backdrop'}`} role={inline ? undefined : 'presentation'}>
+          <div className={`pdf-builder-modal ${inline ? 'pdf-builder-modal-inline' : ''}`} role={inline ? undefined : 'dialog'} aria-modal={inline ? undefined : 'true'}>
             <header className="pdf-builder-modal-header">
               <div>
                 <p className="pdf-builder-kicker">PDF Builder</p>
                 <h2>Create a report that fits your story</h2>
               </div>
-              <button
-                type="button"
-                className="button button-secondary pdf-builder-close"
-                onClick={() => setIsOpen(false)}
-              >
-                Close
-              </button>
+              {!inline && (
+                <button
+                  type="button"
+                  className="button button-secondary pdf-builder-close"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Close
+                </button>
+              )}
             </header>
 
             <div className="pdf-builder-tabs">
@@ -305,9 +339,16 @@ export const PDFReportBuilder: React.FC<PDFReportBuilderProps> = ({
 
             <div className="pdf-builder-content">
               {activeTab === 'content' && (
-                <div className="pdf-builder-panel">
+                <div className="pdf-builder-panel pdf-builder-panel-grid">
                   {orderedSections.map((section) => (
-                    <div key={section.id} className="pdf-builder-section card">
+                    <div
+                      key={section.id}
+                      className={`pdf-builder-section card ${
+                        draggedSectionId === section.id ? 'is-dragging' : ''
+                      } ${dropTargetId === section.id ? 'is-drop-target' : ''}`}
+                      onDragOver={handleDragOver(section.id)}
+                      onDrop={handleDrop(section.id)}
+                    >
                       <div className="pdf-builder-section-header">
                         <label className="pdf-builder-section-toggle">
                           <input
@@ -324,17 +365,14 @@ export const PDFReportBuilder: React.FC<PDFReportBuilderProps> = ({
                         <div className="pdf-builder-section-actions">
                           <button
                             type="button"
-                            className="button button-secondary"
-                            onClick={() => handleMoveSection(section.id, -1)}
+                            className="pdf-builder-drag-handle"
+                            draggable
+                            aria-label="Drag to reorder"
+                            title="Drag to reorder"
+                            onDragStart={handleDragStart(section.id)}
+                            onDragEnd={handleDragEnd}
                           >
-                            Move Up
-                          </button>
-                          <button
-                            type="button"
-                            className="button button-secondary"
-                            onClick={() => handleMoveSection(section.id, 1)}
-                          >
-                            Move Down
+                            ⋮⋮
                           </button>
                         </div>
                       </div>
@@ -618,7 +656,7 @@ export const PDFReportBuilder: React.FC<PDFReportBuilderProps> = ({
                     </div>
                     {!hasValidSelection && (
                       <p className="pdf-builder-warning">
-                        Select at least one section to generate a report.
+                        Select at least one section to continue.
                       </p>
                     )}
                     <p className="pdf-builder-note">
@@ -626,20 +664,82 @@ export const PDFReportBuilder: React.FC<PDFReportBuilderProps> = ({
                     </p>
                   </div>
 
-                  <div className="pdf-builder-generate">
+                  <div className="pdf-builder-review-actions">
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      onClick={() => setShowPreview(true)}
+                    >
+                      Preview
+                    </button>
                     <PDFReportButton
                       stockSymbol={stockSymbol}
                       language={language}
                       userId={userId}
                       reportConfig={reportConfig}
-                      generateLabelOverride="Generate Custom PDF"
-                      downloadLabelOverride="Download Custom PDF"
                       disabled={!hasValidSelection}
-                      className="pdf-builder-generate-button"
+                      generateLabelOverride="Generate PDF"
+                      downloadLabelOverride="Download PDF"
                     />
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPreview && (
+        <div className="pdf-builder-preview-backdrop" role="presentation">
+          <div className="pdf-builder-preview-card" role="dialog" aria-modal="true">
+            <header className="pdf-builder-preview-header">
+              <div>
+                <p className="pdf-builder-kicker">Preview</p>
+                <h3>Report snapshot</h3>
+              </div>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => setShowPreview(false)}
+              >
+                Close
+              </button>
+            </header>
+            <div className="pdf-builder-preview-body">
+              <div className="pdf-builder-preview-row">
+                <span className="pdf-builder-preview-label">Preset</span>
+                <span className="pdf-builder-preview-value">{design.preset}</span>
+              </div>
+              <div className="pdf-builder-preview-row">
+                <span className="pdf-builder-preview-label">Typeface</span>
+                <span className="pdf-builder-preview-value">{design.fontFamily || 'sans'}</span>
+              </div>
+              <div className="pdf-builder-preview-row">
+                <span className="pdf-builder-preview-label">Density</span>
+                <span className="pdf-builder-preview-value">{design.density || 'comfortable'}</span>
+              </div>
+              <div className="pdf-builder-preview-swatches">
+                <div className="pdf-builder-preview-swatch">
+                  <span style={{ backgroundColor: design.brandColor || '#1a73e8' }} />
+                  <span>Brand</span>
+                </div>
+                <div className="pdf-builder-preview-swatch">
+                  <span style={{ backgroundColor: design.accentColor || '#e8f0fe' }} />
+                  <span>Accent</span>
+                </div>
+              </div>
+              <div className="pdf-builder-preview-sections">
+                <span className="pdf-builder-preview-label">Sections</span>
+                {hasValidSelection ? (
+                  <div className="pdf-builder-review-list">
+                    {enabledSections.map((section) => (
+                      <span key={section.id}>{SECTION_METADATA[section.id].title}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="pdf-builder-warning">Select at least one section to preview.</p>
+                )}
+              </div>
             </div>
           </div>
         </div>

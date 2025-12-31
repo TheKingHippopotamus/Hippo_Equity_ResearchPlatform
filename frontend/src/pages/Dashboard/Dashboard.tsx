@@ -1,20 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { StockCard } from '../../components/StockCard/StockCard';
 import { NewsCard } from '../../components/NewsCard/NewsCard';
-import { ChartComponent } from '../../components/ChartComponent/ChartComponent';
 import { FinancialMetricsPanel } from '../../components/FinancialMetricsPanel/FinancialMetricsPanel';
 import { LanguageSelector } from '../../components/LanguageSelector/LanguageSelector';
 import { AutopilotQueue } from '../../components/AutopilotQueue/AutopilotQueue';
 import { PDFReportBuilder } from '../../components/PDFReportBuilder/PDFReportBuilder';
 import { ThemeToggle } from '../../components/ThemeToggle/ThemeToggle';
+import { ChartComponent } from '../../components/ChartComponent/ChartComponent';
+import type { ChartDataPoint, ChartNewsItem } from '../../components/ChartComponent/ChartComponent';
 import { apiService } from '../../services/api';
 import { translationService } from '../../services/translation';
 import { validateStockSymbol, validateStockSymbols } from '../../utils/validation';
-import type { PriceHistoryMap, PriceHistorySeries, ProcessedStockData, SupportedLanguage } from '../../types/models';
+import type { ProcessedStockData, SupportedLanguage, PriceHistoryMap } from '../../types/models';
 import type { ThemeId } from '../../components/ThemeToggle/ThemeToggle';
 import './Dashboard.css';
-
-const HISTORY_PREFERENCE = ['10Y', '5Y', '1Y', '6M', '3M', '1M', '1D'];
 
 const normalizeHistoryLabel = (label: string) => {
   const trimmed = label.trim();
@@ -35,54 +34,6 @@ const normalizeHistoryLabel = (label: string) => {
   return trimmed;
 };
 
-const selectHistorySeries = (history?: PriceHistoryMap) => {
-  if (!history) {
-    return null;
-  }
-  for (const key of HISTORY_PREFERENCE) {
-    if (history[key]) {
-      return { range: key, series: history[key] };
-    }
-  }
-  const entries = Object.entries(history);
-  if (entries.length === 0) {
-    return null;
-  }
-  entries.sort((a, b) => (b[1].prices?.length || 0) - (a[1].prices?.length || 0));
-  return { range: entries[0][0], series: entries[0][1] };
-};
-
-const buildChartData = (series: PriceHistorySeries) => {
-  const length = Math.min(series.labels.length, series.prices.length);
-  const mapped = [];
-
-  for (let i = 0; i < length; i += 1) {
-    const label = normalizeHistoryLabel(String(series.labels[i] ?? ''));
-    const value = series.prices[i];
-    if (!label || !Number.isFinite(value)) {
-      continue;
-    }
-    mapped.push({ date: label, value });
-  }
-
-  return mapped.sort((a, b) => a.date.localeCompare(b.date));
-};
-
-const sortRanges = (ranges: string[]) =>
-  [...ranges].sort((a, b) => {
-    const indexA = HISTORY_PREFERENCE.indexOf(a);
-    const indexB = HISTORY_PREFERENCE.indexOf(b);
-    if (indexA === -1 && indexB === -1) {
-      return a.localeCompare(b);
-    }
-    if (indexA === -1) {
-      return 1;
-    }
-    if (indexB === -1) {
-      return -1;
-    }
-    return indexA - indexB;
-  });
 
 export const Dashboard: React.FC = () => {
   const getStoredTheme = (): ThemeId => {
@@ -111,6 +62,8 @@ export const Dashboard: React.FC = () => {
     localStorage.setItem('userId', newId);
     return newId;
   });
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryMap | null>(null);
+  const [chartLoading, setChartLoading] = useState<boolean>(false);
 
   useEffect(() => {
     const body = document.body;
@@ -152,6 +105,24 @@ export const Dashboard: React.FC = () => {
     try {
       const data = await apiService.getStockData(symbol, language);
       setStockData(data);
+      
+      // Fetch price history if not included in stockData
+      if (data.priceHistory) {
+        setPriceHistory(data.priceHistory);
+      } else {
+        setChartLoading(true);
+        try {
+          const historyData = await apiService.getPriceHistory(symbol);
+          if (historyData.priceHistory) {
+            setPriceHistory(historyData.priceHistory);
+          }
+        } catch (historyErr) {
+          console.warn('Failed to fetch price history:', historyErr);
+          setPriceHistory(null);
+        } finally {
+          setChartLoading(false);
+        }
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch stock data';
       setError(errorMessage);
@@ -254,54 +225,66 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const historyMeta = useMemo(() => {
-    const selection = selectHistorySeries(stockData?.priceHistory);
-    if (!selection) {
-      return null;
-    }
-    const availableRanges = stockData?.priceHistory
-      ? sortRanges(Object.keys(stockData.priceHistory))
-      : [];
-    return { ...selection, availableRanges };
-  }, [stockData?.priceHistory]);
-
-  // Generate chart data from provider history (fallback to mock if missing)
-  const chartData = useMemo(() => {
-    if (historyMeta?.series) {
-      return buildChartData(historyMeta.series);
-    }
-    if (!stockData) {
+  // Transform price history to chart data format
+  const chartData = useMemo<ChartDataPoint[]>(() => {
+    if (!priceHistory) {
       return [];
     }
 
-    const data = [];
-    const basePrice = stockData.stockData.currentPrice;
-    const days = 30;
+    const entries = Object.entries(priceHistory)
+      .map(([range, series]) => {
+        const length = Math.min(series.labels?.length || 0, series.prices?.length || 0);
+        return { range, series, length };
+      })
+      .filter((entry) => entry.length > 0)
+      .sort((a, b) => b.length - a.length);
 
-    for (let i = days; i >= 0; i -= 1) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const variation = (Math.random() - 0.5) * 0.1; // ±5% variation
-      data.push({
-        date: date.toISOString().split('T')[0],
-        value: basePrice * (1 + variation),
-      });
+    const selectedSeries = entries[0]?.series;
+    if (!selectedSeries || !selectedSeries.labels || !selectedSeries.prices) {
+      return [];
     }
 
-    return data;
-  }, [historyMeta?.series, stockData?.stockData.currentPrice]);
+    const length = Math.min(selectedSeries.labels.length, selectedSeries.prices.length);
+    const mapped: ChartDataPoint[] = [];
 
-  const chartTitle = historyMeta?.range
-    ? `Price History (${historyMeta.range})`
-    : 'Price History (30 Days)';
-  const chartTimeRange = historyMeta?.availableRanges?.length
-    ? `Available: ${historyMeta.availableRanges.join(' • ')}`
-    : 'Mock data';
+    for (let i = 0; i < length; i += 1) {
+      const label = normalizeHistoryLabel(String(selectedSeries.labels[i] ?? ''));
+      const value = selectedSeries.prices[i];
+      if (!label || !Number.isFinite(value)) {
+        continue;
+      }
+      mapped.push({ date: label, value });
+    }
+
+    return mapped.sort((a, b) => a.date.localeCompare(b.date));
+  }, [priceHistory]);
+
+  const chartTimeRange = useMemo(() => {
+    if (chartData.length < 2) {
+      return '';
+    }
+    const start = chartData[0].date;
+    const end = chartData[chartData.length - 1].date;
+    return `${start} → ${end}`;
+  }, [chartData]);
+
+  // Transform news items for chart markers
+  const chartNewsItems = useMemo<ChartNewsItem[]>(() => {
+    if (!stockData?.news) return [];
+    return stockData.news.map((article) => ({
+      id: article.id,
+      title: article.title,
+      publishedAt: article.publishedAt,
+      url: article.url,
+      source: article.source,
+      sentiment: article.sentiment,
+    }));
+  }, [stockData?.news]);
 
   return (
     <div className="dashboard">
       <header className="dashboard-header">
-        <div className="dashboard-header-content container">
+        <div className="dashboard-header-content dashboard-shell">
           <div className="dashboard-brand">
             <div className="dashboard-logo">
               <img src="/logo.png" alt="Hippopotamus Research logo" />
@@ -322,143 +305,175 @@ export const Dashboard: React.FC = () => {
         </div>
       </header>
 
-      <main className="dashboard-main container">
-        <div className="dashboard-controls">
-          <div className="symbol-input-group">
-            <label htmlFor="symbol-input">Stock Symbol:</label>
-            <div className="input-wrapper">
-              <input
-                id="symbol-input"
-                type="text"
-                placeholder="Enter symbol (e.g., AAPL)"
-                value={symbolInput}
-                onChange={handleSymbolInputChange}
-                onKeyDown={handleSymbolInput}
-                className={`symbol-input ${symbolValidationError ? 'input-error' : ''}`}
-                aria-invalid={!!symbolValidationError}
-                aria-describedby={symbolValidationError ? 'symbol-error' : undefined}
-              />
-              <button
-                className="button button-primary"
-                onClick={handleSymbolSubmit}
-                disabled={!!symbolValidationError || !symbolInput.trim()}
-              >
-                Search
-              </button>
-            </div>
-            {symbolValidationError && (
-              <div id="symbol-error" className="validation-error" role="alert">
-                {symbolValidationError}
+      <main className="dashboard-main dashboard-shell">
+        <div className="dashboard-layout">
+          <div className="dashboard-primary">
+            {error && (
+              <div className="dashboard-error card">
+                <p>{error}</p>
+                <button
+                  className="button button-secondary"
+                  onClick={() => setError(null)}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {loading && (
+              <div className="dashboard-loading card">
+                <p>Loading stock data...</p>
+              </div>
+            )}
+
+            {stockData && !loading && (
+              <div className="dashboard-content">
+                <div className="dashboard-hero-section">
+                  <div className="dashboard-chart-section">
+                    {chartLoading ? (
+                      <div className="dashboard-chart-loading card">
+                        <p>Loading chart data...</p>
+                      </div>
+                    ) : chartData.length > 0 ? (
+                      <ChartComponent
+                        data={chartData}
+                        type="area"
+                        title={`${stockData.symbol} Price History`}
+                        timeRange={chartTimeRange}
+                        newsItems={chartNewsItems}
+                        xAxisLabel="Date"
+                        yAxisLabel="Price (USD)"
+                      />
+                    ) : (
+                      <div className="dashboard-chart-empty card">
+                        <p>Price history data not available</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="dashboard-pdf-section">
+                  <PDFReportBuilder
+                    stockSymbol={stockData.symbol}
+                    language={language}
+                    userId={userId}
+                    inline={true}
+                    defaultOpen={true}
+                  />
+                </div>
+
+                <div className="dashboard-news-section">
+                  <h2 className="dashboard-section-title">News Articles</h2>
+                  <div className="news-grid">
+                    {stockData.news.map((article) => (
+                      <NewsCard
+                        key={article.id}
+                        article={article}
+                        language={language}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!stockData && !loading && !error && (
+              <div className="dashboard-empty card">
+                <p>Enter a stock symbol to get started</p>
               </div>
             )}
           </div>
-          
-          <button
-            className="button button-primary"
-            onClick={() => {
-              const symbols = prompt('Enter stock symbols (comma-separated):');
-              if (symbols) {
-                const symbolList = symbols.split(',').map(s => s.trim()).filter(Boolean);
-                if (symbolList.length > 0) {
-                  handleEnqueueSymbols(symbolList);
-                } else {
-                  setError('Please enter at least one valid stock symbol');
-                }
-              }
-            }}
-          >
-            Start Autopilot
-          </button>
-        </div>
 
-        {error && (
-          <div className="dashboard-error card">
-            <p>{error}</p>
-            <button
-              className="button button-secondary"
-              onClick={() => setError(null)}
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
+          <aside className="dashboard-sidebar">
+            <div className="dashboard-search card">
+              <div className="dashboard-search-header">
+                <h2>Search</h2>
+                <p>Track a new symbol</p>
+              </div>
+              <div className="symbol-input-group">
+                <label htmlFor="symbol-input">Stock Symbol</label>
+                <div className="input-wrapper compact">
+                  <input
+                    id="symbol-input"
+                    type="text"
+                    placeholder="Enter symbol (AAPL)"
+                    value={symbolInput}
+                    onChange={handleSymbolInputChange}
+                    onKeyDown={handleSymbolInput}
+                    className={`symbol-input compact ${symbolValidationError ? 'input-error' : ''}`}
+                    aria-invalid={!!symbolValidationError}
+                    aria-describedby={symbolValidationError ? 'symbol-error' : undefined}
+                  />
+                  <button
+                    className="button button-primary"
+                    onClick={handleSymbolSubmit}
+                    disabled={!!symbolValidationError || !symbolInput.trim()}
+                  >
+                    Search
+                  </button>
+                </div>
+                {symbolValidationError && (
+                  <div id="symbol-error" className="validation-error" role="alert">
+                    {symbolValidationError}
+                  </div>
+                )}
+              </div>
+              {stockData && (
+                <div className="dashboard-symbol-display">
+                  <span className="dashboard-symbol-text">{stockData.symbol}</span>
+                </div>
+              )}
+              <button
+                className="button button-secondary dashboard-autopilot-trigger"
+                onClick={() => {
+                  const symbols = prompt('Enter stock symbols (comma-separated):');
+                  if (symbols) {
+                    const symbolList = symbols.split(',').map((s) => s.trim()).filter(Boolean);
+                    if (symbolList.length > 0) {
+                      handleEnqueueSymbols(symbolList);
+                    } else {
+                      setError('Please enter at least one valid stock symbol');
+                    }
+                  }
+                }}
+              >
+                Start Autopilot
+              </button>
+            </div>
 
-        {showAutopilot && queueId && (
-          <div className="dashboard-autopilot">
-            <AutopilotQueue
-              queueId={queueId}
-              language={language}
-              onCancel={() => {
-                setShowAutopilot(false);
-                setQueueId(null);
-              }}
-            />
-          </div>
-        )}
-
-        {loading && (
-          <div className="dashboard-loading card">
-            <p>Loading stock data...</p>
-          </div>
-        )}
-
-        {stockData && !loading && (
-          <div className="dashboard-content">
-            <div className="dashboard-stock-section">
-              <StockCard
-                stockData={stockData.stockData}
-                language={language}
-                onSelect={setCurrentSymbol}
-              />
-              
-              <div className="dashboard-actions">
-                <PDFReportBuilder
-                  stockSymbol={stockData.symbol}
+            {stockData && (
+              <div className="dashboard-stock-section">
+                <StockCard
+                  stockData={stockData.stockData}
                   language={language}
-                  userId={userId}
+                  onSelect={setCurrentSymbol}
                 />
               </div>
-            </div>
+            )}
 
-            <div className="dashboard-chart-section">
-              <ChartComponent
-                data={chartData}
-                type="line"
-                title={chartTitle}
-                timeRange={chartTimeRange}
-                xAxisLabel="Date"
-                yAxisLabel="Price (USD)"
-                newsItems={stockData.news}
-              />
-            </div>
-
-            <div className="dashboard-news-section">
-              <h2>News Articles</h2>
-              <div className="news-grid">
-                {stockData.news.map((article) => (
-                  <NewsCard
-                    key={article.id}
-                    article={article}
-                    language={language}
-                  />
-                ))}
+            {showAutopilot && queueId && (
+              <div className="dashboard-autopilot">
+                <AutopilotQueue
+                  queueId={queueId}
+                  language={language}
+                  onCancel={() => {
+                    setShowAutopilot(false);
+                    setQueueId(null);
+                  }}
+                />
               </div>
-            </div>
+            )}
 
-            <div className="dashboard-analysis-section">
-              <FinancialMetricsPanel
-                analysis={stockData.analysis}
-                language={language}
-              />
-            </div>
-          </div>
-        )}
-
-        {!stockData && !loading && !error && (
-          <div className="dashboard-empty card">
-            <p>Enter a stock symbol to get started</p>
-          </div>
-        )}
+            {stockData && (
+              <div className="dashboard-analysis-section">
+                <FinancialMetricsPanel
+                  analysis={stockData.analysis}
+                  language={language}
+                />
+              </div>
+            )}
+          </aside>
+        </div>
       </main>
     </div>
   );

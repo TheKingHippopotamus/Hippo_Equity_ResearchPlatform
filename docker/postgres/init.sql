@@ -23,11 +23,6 @@ END $$;
 
 -- Run migrations
 -- Note: In production, use a proper migration tool like Flyway or Alembic
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'stock_data' AND table_name = 'stocks') THEN
-        RAISE NOTICE 'Migrations already applied, skipping...';
-    ELSE
-        \i /docker-entrypoint-initdb.d/migrations/001_initial_schema.sql
-    END IF;
-END $$;
+\i /docker-entrypoint-initdb.d/migrations/001_initial_schema.sql
+\i /docker-entrypoint-initdb.d/migrations/002_error_logging_schema.sql
+\i /docker-entrypoint-initdb.d/migrations/003_query_optimization_indexes.sql

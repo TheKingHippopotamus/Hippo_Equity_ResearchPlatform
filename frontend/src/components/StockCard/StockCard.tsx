@@ -8,12 +8,14 @@ interface StockCardProps {
   stockData: StockData;
   language?: SupportedLanguage;
   onSelect?: (symbol: string) => void;
+  headerAddon?: React.ReactNode;
 }
 
 export const StockCard: React.FC<StockCardProps> = ({
   stockData,
   language = 'en',
   onSelect,
+  headerAddon,
 }) => {
   const [priceLabel, setPriceLabel] = React.useState('Current Price');
   const [changeLabel, setChangeLabel] = React.useState('Change');
@@ -66,8 +68,19 @@ export const StockCard: React.FC<StockCardProps> = ({
       }}
     >
       <div className="stock-card-header">
-        <h2 className="stock-card-symbol">{stockData.symbol}</h2>
-        <span className="stock-card-date">{stockData.tradingDate}</span>
+        <div className="stock-card-header-main">
+          <h2 className="stock-card-symbol">{stockData.symbol}</h2>
+          <span className="stock-card-date">{stockData.tradingDate}</span>
+        </div>
+        {headerAddon && (
+          <div
+            className="stock-card-header-addon"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            {headerAddon}
+          </div>
+        )}
       </div>
       
       <div className="stock-card-price">
@@ -100,4 +113,3 @@ export const StockCard: React.FC<StockCardProps> = ({
 };
 
 export default StockCard;
-

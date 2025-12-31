@@ -15,7 +15,7 @@ export const NewsCard: React.FC<NewsCardProps> = ({
   language = 'en',
   onExpand,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [sentimentLabel, setSentimentLabel] = useState<string>('');
 
   React.useEffect(() => {
@@ -25,6 +25,29 @@ export const NewsCard: React.FC<NewsCardProps> = ({
     };
     loadTranslations();
   }, [article.sentiment, language]);
+
+  React.useEffect(() => {
+    // Close modal on Escape key
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isModalOpen) {
+        setIsModalOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isModalOpen]);
+
+  React.useEffect(() => {
+    // Prevent body scroll when modal is open
+    if (isModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isModalOpen]);
 
   const formatDate = (dateString: string): string => {
     try {
@@ -49,68 +72,143 @@ export const NewsCard: React.FC<NewsCardProps> = ({
     return 'very-positive';
   };
 
-  const handleExpand = () => {
-    setIsExpanded(!isExpanded);
-    if (onExpand && !isExpanded) {
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't open modal if clicking on the link
+    if ((e.target as HTMLElement).closest('.news-card-link')) {
+      return;
+    }
+    setIsModalOpen(true);
+    if (onExpand) {
       onExpand(article);
     }
   };
 
+  const handleCloseModal = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsModalOpen(false);
+  };
+
+  const handleModalContentClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
   return (
-    <article className="news-card card">
-      {article.imageUrl && (
-        <div className="news-card-image">
-          <img src={article.imageUrl} alt={article.title} loading="lazy" />
-        </div>
-      )}
-
-      <div className="news-card-content">
-        <div className="news-card-header">
-          <h3 className="news-card-title">{article.title}</h3>
-          <div className="news-card-meta">
-            <span className="news-card-source">{article.source}</span>
-            <span className="news-card-date">{formatDate(article.publishedAt)}</span>
-          </div>
-        </div>
-
-        <div className="news-card-sentiment">
-          <span className={`sentiment-badge sentiment-${getSentimentColor(article.sentiment)}`}>
-            {sentimentLabel}
-          </span>
-        </div>
-
-        <div className="news-card-body">
-          {isExpanded ? (
-            <div className="news-card-full-content">
-              <p>{article.content}</p>
-            </div>
-          ) : (
-            <p className="news-card-preview">{article.contentPreview}</p>
-          )}
-
-          <button
-            className="news-card-expand button button-secondary"
-            onClick={handleExpand}
-            aria-expanded={isExpanded}
-          >
-            {isExpanded ? 'Show Less' : 'Read More'}
-          </button>
-        </div>
-
-        {article.url && (
-          <div className="news-card-footer">
-            <a
-              href={article.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="news-card-link"
-            >
-              View Original Article →
-            </a>
+    <>
+      <article 
+        className="news-card card news-card-clickable" 
+        onClick={handleCardClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleCardClick(e as any);
+          }
+        }}
+      >
+        {article.imageUrl && (
+          <div className="news-card-image">
+            <img src={article.imageUrl} alt={article.title} loading="lazy" />
           </div>
         )}
-      </div>
-    </article>
+
+        <div className="news-card-content">
+          <div className="news-card-header">
+            <h3 className="news-card-title">{article.title}</h3>
+            <div className="news-card-meta">
+              <span className="news-card-source">{article.source}</span>
+              <span className="news-card-date">{formatDate(article.publishedAt)}</span>
+            </div>
+          </div>
+
+          <div className="news-card-sentiment">
+            <span className={`sentiment-badge sentiment-${getSentimentColor(article.sentiment)}`}>
+              {sentimentLabel}
+            </span>
+          </div>
+
+          <div className="news-card-body">
+            <p className="news-card-preview">{article.contentPreview}</p>
+          </div>
+
+          {article.url && (
+            <div className="news-card-footer">
+              <a
+                href={article.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="news-card-link"
+                onClick={(e) => e.stopPropagation()}
+              >
+                View Original Article →
+              </a>
+            </div>
+          )}
+        </div>
+      </article>
+
+      {isModalOpen && (
+        <div 
+          className="news-modal-backdrop" 
+          onClick={handleCloseModal}
+          role="presentation"
+        >
+          <div 
+            className="news-modal" 
+            onClick={handleModalContentClick}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="news-modal-title"
+          >
+            <button
+              className="news-modal-close"
+              onClick={handleCloseModal}
+              aria-label="Close modal"
+            >
+              ×
+            </button>
+
+            {article.imageUrl && (
+              <div className="news-modal-image">
+                <img src={article.imageUrl} alt={article.title} />
+              </div>
+            )}
+
+            <div className="news-modal-content">
+              <header className="news-modal-header">
+                <h2 id="news-modal-title" className="news-modal-title">{article.title}</h2>
+                <div className="news-modal-meta">
+                  <span className="news-modal-source">{article.source}</span>
+                  <span className="news-modal-date">{formatDate(article.publishedAt)}</span>
+                </div>
+                <div className="news-modal-sentiment">
+                  <span className={`sentiment-badge sentiment-${getSentimentColor(article.sentiment)}`}>
+                    {sentimentLabel}
+                  </span>
+                </div>
+              </header>
+
+              <div className="news-modal-body">
+                <p>{article.content}</p>
+              </div>
+
+              {article.url && (
+                <footer className="news-modal-footer">
+                  <a
+                    href={article.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="news-modal-link button button-primary"
+                  >
+                    View Original Article →
+                  </a>
+                </footer>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

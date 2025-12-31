@@ -42,8 +42,6 @@ export interface ChartNewsItem {
 
 type ThemeId = 'light' | 'slate' | 'midnight';
 type LineWidthOption = 1 | 2 | 3 | 4;
-type NewsDisplayMode = 'floating' | 'inline';
-
 interface ChartComponentProps {
   data: ChartDataPoint[];
   type?: ChartType;
@@ -217,7 +215,7 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
   const [activeType, setActiveType] = useState<ChartType>(type);
-  const [activeRange, setActiveRange] = useState<TimeframeId>('1M');
+  const [activeRange, setActiveRange] = useState<TimeframeId>('ALL');
   const [gridVisible, setGridVisible] = useState(true);
   const [crosshairVisible, setCrosshairVisible] = useState(true);
   const [crosshairMode, setCrosshairMode] = useState<CrosshairMode>(CrosshairMode.Normal);
@@ -246,16 +244,11 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
   const [themeId, setThemeId] = useState<ThemeId>('light');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showNews, setShowNews] = useState(false);
-  const [newsDisplayMode, setNewsDisplayMode] = useState<NewsDisplayMode>('floating');
   const [hoveredNews, setHoveredNews] = useState<{
     date: string;
     items: ChartNewsItem[];
   } | null>(null);
-  const [hoveredNewsPosition, setHoveredNewsPosition] = useState<{ x: number; y: number } | null>(
-    null
-  );
   const lastNewsDateRef = useRef<string | null>(null);
-  const newsTooltipRef = useRef<HTMLDivElement | null>(null);
   const seriesData = useMemo(() => {
     const mapped = data
       .map((point) => {
@@ -378,7 +371,7 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
       });
     });
     return markers;
-  }, [newsByDate, newsDisplayMode, showNews]);
+  }, [newsByDate, showNews]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -564,7 +557,6 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
     if (!showNews || newsMarkers.length === 0) {
       markerPluginRef.current?.setMarkers([]);
       setHoveredNews(null);
-      setHoveredNewsPosition(null);
       return;
     }
 
@@ -586,14 +578,12 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
     const handleMove = (param: Parameters<IChartApi['subscribeCrosshairMove']>[0] extends (p: infer P) => void ? P : never) => {
       if (!showNews || newsByDate.size === 0) {
         setHoveredNews(null);
-        setHoveredNewsPosition(null);
         lastNewsDateRef.current = null;
         return;
       }
 
       if (!param?.time) {
         setHoveredNews(null);
-        setHoveredNewsPosition(null);
         lastNewsDateRef.current = null;
         return;
       }
@@ -601,7 +591,6 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
       const date = toIsoDate(param.time as Time);
       if (!date) {
         setHoveredNews(null);
-        setHoveredNewsPosition(null);
         lastNewsDateRef.current = null;
         return;
       }
@@ -609,31 +598,14 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
       const items = newsByDate.get(date);
       if (!items || items.length === 0) {
         setHoveredNews(null);
-        setHoveredNewsPosition(null);
         lastNewsDateRef.current = null;
         return;
       }
 
-      const isSameDate = lastNewsDateRef.current === date;
-      lastNewsDateRef.current = date;
-
-      if (!isSameDate && newsDisplayMode === 'floating' && param.point && containerRef.current?.parentElement) {
-        const surface = containerRef.current.parentElement;
-        const tooltipWidth = newsTooltipRef.current?.offsetWidth ?? 320;
-        const tooltipHeight = newsTooltipRef.current?.offsetHeight ?? 180;
-        const padding = 16;
-        const maxX = Math.max(padding, surface.clientWidth - tooltipWidth - padding);
-        const maxY = Math.max(padding, surface.clientHeight - tooltipHeight - padding);
-        const nextX = Math.min(Math.max(param.point.x + 12, padding), maxX);
-        const nextY = Math.min(Math.max(param.point.y + 12, padding), maxY);
-        setHoveredNewsPosition({ x: nextX, y: nextY });
-      } else if (newsDisplayMode !== 'floating') {
-        setHoveredNewsPosition(null);
+      if (lastNewsDateRef.current !== date) {
+        lastNewsDateRef.current = date;
+        setHoveredNews({ date, items });
       }
-
-      setHoveredNews((prev) =>
-        prev?.date === date && prev.items.length === items.length ? prev : { date, items }
-      );
     };
 
     chart.subscribeCrosshairMove(handleMove);
@@ -1109,21 +1081,6 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
           </div>
 
           <div className="chart-advanced-group">
-            <p className="chart-advanced-title">News</p>
-            <label className="chart-control">
-              <span>Display</span>
-              <select
-                value={newsDisplayMode}
-                onChange={(event) => setNewsDisplayMode(event.target.value as NewsDisplayMode)}
-                disabled={!showNews}
-              >
-                <option value="floating">Hover bubble</option>
-                <option value="inline">Inline panel</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="chart-advanced-group">
             <p className="chart-advanced-title">Watermark</p>
             <label className="chart-control checkbox">
               <input
@@ -1152,16 +1109,8 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
             {watermarkText}
           </div>
         )}
-        {showNews && hoveredNews && (newsDisplayMode === 'inline' || hoveredNewsPosition) && (
-          <div
-            ref={newsTooltipRef}
-            className={`chart-news-tooltip ${newsDisplayMode}`}
-            style={
-              newsDisplayMode === 'floating' && hoveredNewsPosition
-                ? { left: `${hoveredNewsPosition.x}px`, top: `${hoveredNewsPosition.y}px` }
-                : undefined
-            }
-          >
+        {showNews && hoveredNews && (
+          <div className="chart-news-tooltip">
             <div className="chart-news-date">{hoveredNews.date}</div>
             <ul>
               {hoveredNews.items.slice(0, 3).map((item) => (

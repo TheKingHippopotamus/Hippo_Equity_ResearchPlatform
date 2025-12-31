@@ -5,8 +5,10 @@
   width: 100%;
   position: relative;
   overflow: hidden;
+  padding: var(--spacing-md);
   background: linear-gradient(135deg, var(--surface-2) 0%, var(--bg-secondary) 55%, var(--bg-tertiary) 100%);
   border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-xl);
   box-shadow: var(--shadow-md);
   --chart-accent: var(--color-primary);
   --chart-accent-strong: var(--color-primary-dark);
@@ -16,6 +18,23 @@
   --chart-border: var(--border-color);
   --chart-glow: var(--chart-glow-base);
   animation: chart-rise 380ms ease-out;
+}
+
+.chart-header,
+.chart-toolbar,
+.chart-advanced,
+.chart-surface {
+  width: 100%;
+}
+
+.chart-component.card {
+  box-shadow: var(--shadow-md);
+  transform: none;
+}
+
+.chart-component.card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: none;
 }
 
 .chart-component::before {
@@ -274,31 +293,18 @@
 
 .chart-news-tooltip {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  width: min(320px, 85%);
-  background: rgba(15, 23, 42, 0.92);
-  color: #f8fafc;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
-  box-shadow: 0 18px 30px -18px rgba(15, 23, 42, 0.6);
+  left: 16px;
+  bottom: 16px;
+  max-width: min(520px, calc(100% - 32px));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92));
+  color: #0f172a;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 16px 28px -18px rgba(15, 23, 42, 0.45);
   font-size: 0.75rem;
   z-index: 3;
-}
-
-.chart-news-tooltip.floating {
-  right: auto;
-  top: auto;
-}
-
-.chart-news-tooltip.inline {
-  left: 16px;
-  right: 16px;
-  top: auto;
-  bottom: 16px;
-  width: auto;
-  max-width: none;
+  backdrop-filter: blur(10px);
 }
 
 .chart-news-tooltip ul {
@@ -320,7 +326,7 @@
   height: 8px;
   border-radius: 999px;
   margin-top: 4px;
-  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.3);
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.12);
   flex-shrink: 0;
 }
 
@@ -331,7 +337,7 @@
 
 .chart-news-tooltip a,
 .chart-news-tooltip span {
-  color: #f8fafc;
+  color: #0f172a;
   text-decoration: none;
 }
 
@@ -343,7 +349,7 @@
   font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  color: rgba(248, 250, 252, 0.7);
+  color: rgba(15, 23, 42, 0.55);
 }
 
 .chart-news-source {
@@ -351,7 +357,7 @@
   margin-left: 6px;
   padding: 2px 6px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.25);
   font-size: 0.6rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -360,7 +366,7 @@
 .chart-news-more {
   margin-top: 8px;
   font-size: 0.65rem;
-  color: rgba(248, 250, 252, 0.7);
+  color: rgba(15, 23, 42, 0.6);
 }
 
 .chart-x-axis-label,

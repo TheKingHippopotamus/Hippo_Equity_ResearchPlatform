@@ -173,6 +173,14 @@ class ApiService {
     });
     return response.data;
   }
+
+  // Price History endpoint
+  async getPriceHistory(symbol: string, range?: string) {
+    const response = await this.client.get(`/data/stock/${symbol}/history`, {
+      params: range ? { range } : {},
+    });
+    return response.data;
+  }
 }
 
 export const apiService = new ApiService();
