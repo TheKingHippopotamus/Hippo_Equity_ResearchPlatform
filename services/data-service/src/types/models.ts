@@ -63,8 +63,16 @@ export interface ProcessedStockData {
   stockData: StockData;
   news: NewsArticle[];
   analysis: FinancialAnalysis;
+  priceHistory?: PriceHistoryMap;
   fetchedAt: string;
 }
+
+export interface PriceHistorySeries {
+  labels: string[];
+  prices: number[];
+}
+
+export type PriceHistoryMap = Record<string, PriceHistorySeries>;
 
 // Raw API Response Types (may vary from actual API)
 export interface RawStockNewsResponse {

@@ -1,16 +1,26 @@
-# Agent A - UI Chart Updates Documentation
+# MISSION : Agent A - UI Chart Updates Documentation
 
-**Date:** 2025-12-30
-**Agent:** A
-**Scope:** Frontend chart controls, stability fixes, TradingView-like options
+**Agent:** Vizzen  
+**Tribe:** Cursor  
+**Role:** Visualization Engineer  
+**Date:** 2025-12-30  
+**Scope:** Frontend chart controls, stability fixes, TradingView-like options  
+
+---
+
+## Table of Contents
+
+1. [Objective](#objective)
+2. [Key Changes](#key-changes)
+3. [Files Updated](#files-updated)
+4. [Build Status](#build-status)
+5. [Notes / Follow-ups](#notes--follow-ups)
 
 ---
 
 ## Objective
 
 Improve the UI chart experience by adding timeframe selection, chart style controls, TradingView-like options, and fix the chart instability when users type in inputs.
-
----
 
 ## Key Changes
 
@@ -60,4 +70,3 @@ Improve the UI chart experience by adding timeframe selection, chart style contr
 
 - Current chart uses mock time-series data. For advanced TradingView features (candlesticks, volume, OHLC), backend should provide historical OHLCV data.
 - Timeframe logic is data-driven; once real historical data is wired, ranges will align to actual data availability.
-

@@ -1,8 +1,26 @@
-# PDF Generation + API Gateway Proxy Fix Documentation
+# MISSION : PDF Generation + API Gateway Proxy Fix Documentation
 
-Date: 2025-12-30
-Owner: Codex (on request)
-Scope: PDF generation failures via API gateway and unreadable Docker logs
+**Agent:** Proxino  
+**Tribe:** Codex  
+**Role:** Edge Routing Specialist  
+**Date:** 2025-12-30  
+**Owner:** Codex (on request)  
+**Scope:** PDF generation failures via API gateway and unreadable Docker logs  
+
+---
+
+## Table of Contents
+
+1. [Objective](#objective)
+2. [Initial Symptoms](#initial-symptoms)
+3. [Root Causes Identified](#root-causes-identified)
+4. [Fixes Applied](#fixes-applied)
+5. [Commands Executed (high level)](#commands-executed-high-level)
+6. [Current Status](#current-status)
+7. [Files Modified](#files-modified)
+8. [Residual Notes](#residual-notes)
+
+---
 
 ## Objective
 Restore PDF generation through `api-gateway` and ensure Docker logs display structured request data instead of `[object Object]`.

@@ -6,18 +6,99 @@ import { FinancialMetricsPanel } from '../../components/FinancialMetricsPanel/Fi
 import { LanguageSelector } from '../../components/LanguageSelector/LanguageSelector';
 import { AutopilotQueue } from '../../components/AutopilotQueue/AutopilotQueue';
 import { PDFReportBuilder } from '../../components/PDFReportBuilder/PDFReportBuilder';
+import { ThemeToggle } from '../../components/ThemeToggle/ThemeToggle';
 import { apiService } from '../../services/api';
 import { translationService } from '../../services/translation';
 import { validateStockSymbol, validateStockSymbols } from '../../utils/validation';
-import type { ProcessedStockData, SupportedLanguage } from '../../types/models';
+import type { PriceHistoryMap, PriceHistorySeries, ProcessedStockData, SupportedLanguage } from '../../types/models';
+import type { ThemeId } from '../../components/ThemeToggle/ThemeToggle';
 import './Dashboard.css';
 
+const HISTORY_PREFERENCE = ['10Y', '5Y', '1Y', '6M', '3M', '1M', '1D'];
+
+const normalizeHistoryLabel = (label: string) => {
+  const trimmed = label.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = new Date(trimmed);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+  const asNumber = Number(trimmed);
+  if (!Number.isNaN(asNumber)) {
+    const numericDate = new Date(asNumber);
+    if (!Number.isNaN(numericDate.getTime())) {
+      return numericDate.toISOString().slice(0, 10);
+    }
+  }
+  return trimmed;
+};
+
+const selectHistorySeries = (history?: PriceHistoryMap) => {
+  if (!history) {
+    return null;
+  }
+  for (const key of HISTORY_PREFERENCE) {
+    if (history[key]) {
+      return { range: key, series: history[key] };
+    }
+  }
+  const entries = Object.entries(history);
+  if (entries.length === 0) {
+    return null;
+  }
+  entries.sort((a, b) => (b[1].prices?.length || 0) - (a[1].prices?.length || 0));
+  return { range: entries[0][0], series: entries[0][1] };
+};
+
+const buildChartData = (series: PriceHistorySeries) => {
+  const length = Math.min(series.labels.length, series.prices.length);
+  const mapped = [];
+
+  for (let i = 0; i < length; i += 1) {
+    const label = normalizeHistoryLabel(String(series.labels[i] ?? ''));
+    const value = series.prices[i];
+    if (!label || !Number.isFinite(value)) {
+      continue;
+    }
+    mapped.push({ date: label, value });
+  }
+
+  return mapped.sort((a, b) => a.date.localeCompare(b.date));
+};
+
+const sortRanges = (ranges: string[]) =>
+  [...ranges].sort((a, b) => {
+    const indexA = HISTORY_PREFERENCE.indexOf(a);
+    const indexB = HISTORY_PREFERENCE.indexOf(b);
+    if (indexA === -1 && indexB === -1) {
+      return a.localeCompare(b);
+    }
+    if (indexA === -1) {
+      return 1;
+    }
+    if (indexB === -1) {
+      return -1;
+    }
+    return indexA - indexB;
+  });
+
 export const Dashboard: React.FC = () => {
+  const getStoredTheme = (): ThemeId => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'minimal' || stored === 'tech' || stored === 'luxury') {
+      return stored;
+    }
+    return 'luxury';
+  };
+
   const [currentSymbol, setCurrentSymbol] = useState<string>('AAPL');
   const [stockData, setStockData] = useState<ProcessedStockData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [language, setLanguage] = useState<SupportedLanguage>('en');
+  const [theme, setTheme] = useState<ThemeId>(() => getStoredTheme());
   const [queueId, setQueueId] = useState<string | null>(null);
   const [showAutopilot, setShowAutopilot] = useState<boolean>(false);
   const [symbolInput, setSymbolInput] = useState<string>('');
@@ -30,6 +111,13 @@ export const Dashboard: React.FC = () => {
     localStorage.setItem('userId', newId);
     return newId;
   });
+
+  useEffect(() => {
+    const body = document.body;
+    body.classList.remove('theme-luxury', 'theme-minimal', 'theme-tech');
+    body.classList.add(`theme-${theme}`);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     const initializeLanguage = async () => {
@@ -166,16 +254,31 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // Generate sample chart data from stock data
-  const chartData = useMemo(() => {
-    if (!stockData) return [];
+  const historyMeta = useMemo(() => {
+    const selection = selectHistorySeries(stockData?.priceHistory);
+    if (!selection) {
+      return null;
+    }
+    const availableRanges = stockData?.priceHistory
+      ? sortRanges(Object.keys(stockData.priceHistory))
+      : [];
+    return { ...selection, availableRanges };
+  }, [stockData?.priceHistory]);
 
-    // Generate mock time-series data (in production, this would come from historical data API)
+  // Generate chart data from provider history (fallback to mock if missing)
+  const chartData = useMemo(() => {
+    if (historyMeta?.series) {
+      return buildChartData(historyMeta.series);
+    }
+    if (!stockData) {
+      return [];
+    }
+
     const data = [];
     const basePrice = stockData.stockData.currentPrice;
     const days = 30;
 
-    for (let i = days; i >= 0; i--) {
+    for (let i = days; i >= 0; i -= 1) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       const variation = (Math.random() - 0.5) * 0.1; // ±5% variation
@@ -186,14 +289,30 @@ export const Dashboard: React.FC = () => {
     }
 
     return data;
-  }, [stockData?.symbol, stockData?.stockData.currentPrice]);
+  }, [historyMeta?.series, stockData?.stockData.currentPrice]);
+
+  const chartTitle = historyMeta?.range
+    ? `Price History (${historyMeta.range})`
+    : 'Price History (30 Days)';
+  const chartTimeRange = historyMeta?.availableRanges?.length
+    ? `Available: ${historyMeta.availableRanges.join(' • ')}`
+    : 'Mock data';
 
   return (
     <div className="dashboard">
       <header className="dashboard-header">
         <div className="dashboard-header-content container">
-          <h1 className="dashboard-title">Hippo Equity Research Dashboard</h1>
+          <div className="dashboard-brand">
+            <div className="dashboard-logo">
+              <img src="/logo.png" alt="Hippopotamus Research logo" />
+            </div>
+            <div className="dashboard-brand-text">
+              <span className="dashboard-brand-kicker">Hippopotamus Research</span>
+              <h1 className="dashboard-title">Hippo Equity Research Dashboard</h1>
+            </div>
+          </div>
           <div className="dashboard-header-actions">
+            <ThemeToggle value={theme} onChange={setTheme} />
             <LanguageSelector
               currentLanguage={language}
               onLanguageChange={handleLanguageChange}
@@ -305,9 +424,11 @@ export const Dashboard: React.FC = () => {
               <ChartComponent
                 data={chartData}
                 type="line"
-                title="Price History (30 Days)"
+                title={chartTitle}
+                timeRange={chartTimeRange}
                 xAxisLabel="Date"
                 yAxisLabel="Price (USD)"
+                newsItems={stockData.news}
               />
             </div>
 

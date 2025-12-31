@@ -6,6 +6,8 @@ import persistenceService from './persistenceService.js';
 import {
   NewsArticle,
   FinancialAnalysis,
+  PriceHistoryMap,
+  PriceHistorySeries,
   ProcessedStockData,
   RawStockNewsResponse,
   RawFinancialAnalysisResponse,
@@ -25,6 +27,7 @@ class DataService {
   private readonly MAX_RETRIES = 3;
   private readonly RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff: 1s, 2s, 4s
   private readonly API_KEY: string | undefined;
+  private readonly PRICE_HISTORY_PRIORITY = ['1M', '1Y', '10Y', '1D'];
 
   constructor() {
     // Public API - no API key required
@@ -137,11 +140,26 @@ class DataService {
   /**
    * Fetch price history and derive current/previous prices
    */
-  private async fetchPriceHistory(symbol: string): Promise<StockData | null> {
-    const cacheKey = cacheService.generateKey(symbol, 'price', 'en');
-    const cached = await cacheService.get<StockData>(cacheKey);
-    if (cached) {
-      return cached;
+  private async fetchPriceHistory(
+    symbol: string
+  ): Promise<{ stockData: StockData | null; priceHistory?: PriceHistoryMap }> {
+    const priceKey = cacheService.generateKey(symbol, 'price', 'en');
+    const historyKey = cacheService.generateKey(symbol, 'price-history', 'en');
+
+    const [cachedPrice, cachedHistory] = await Promise.all([
+      cacheService.get<StockData>(priceKey),
+      cacheService.get<PriceHistoryMap>(historyKey),
+    ]);
+
+    if (cachedHistory) {
+      if (!cachedPrice) {
+        const derived = this.deriveStockDataFromHistory(symbol, cachedHistory);
+        if (derived) {
+          await cacheService.set(priceKey, derived, 3600);
+        }
+        return { stockData: derived, priceHistory: cachedHistory };
+      }
+      return { stockData: cachedPrice, priceHistory: cachedHistory };
     }
 
     try {
@@ -149,42 +167,30 @@ class DataService {
         `${this.API_BASE_URL}/api/quote/${symbol}/price-history`
       );
 
-      const history = response.price_history || {};
-      const series =
-        history['1M'] ||
-        history['1Y'] ||
-        history['10Y'] ||
-        history['1D'];
-
-      const prices = series?.prices;
-      const labels = series?.labels;
-
-      if (!Array.isArray(prices) || prices.length === 0) {
-        return null;
+      const normalizedHistory = this.normalizePriceHistory(response.price_history);
+      if (Object.keys(normalizedHistory).length === 0) {
+        return { stockData: cachedPrice || null, priceHistory: cachedHistory || undefined };
       }
 
-      const currentPrice = prices[prices.length - 1] || 0;
-      const previousClose = prices.length > 1 ? prices[prices.length - 2] : currentPrice;
-      const priceChange = currentPrice - previousClose;
-      const priceChangePercent = previousClose ? (priceChange / previousClose) * 100 : 0;
-      const tradingDate = this.parseTradingDate(labels?.[labels.length - 1]);
+      const stockData = this.deriveStockDataFromHistory(symbol, normalizedHistory);
 
-      const stockData: StockData = {
-        symbol,
-        currentPrice,
-        previousClose,
-        priceChange,
-        priceChangePercent,
-        tradingDate,
-        timestamp: new Date().toISOString()
-      };
+      await cacheService.set(historyKey, normalizedHistory, 3600);
+      if (stockData) {
+        await cacheService.set(priceKey, stockData, 3600);
+      }
 
-      await cacheService.set(cacheKey, stockData, 3600);
-      return stockData;
+      return { stockData: stockData || cachedPrice || null, priceHistory: normalizedHistory };
     } catch (error) {
-      logger.warn(`Failed to fetch price history for ${symbol}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      return null;
+      logger.warn(
+        `Failed to fetch price history for ${symbol}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      return { stockData: cachedPrice || null, priceHistory: cachedHistory || undefined };
     }
+  }
+
+  async fetchPriceHistorySeries(symbol: string): Promise<PriceHistoryMap> {
+    const result = await this.fetchPriceHistory(symbol);
+    return result.priceHistory || {};
   }
 
   /**
@@ -200,6 +206,14 @@ class DataService {
     // Check cache first
     const cached = await cacheService.get<ProcessedStockData>(cacheKey);
     if (cached) {
+      if (!cached.priceHistory) {
+        const priceResult = await this.fetchPriceHistory(symbol);
+        if (priceResult.priceHistory) {
+          const enriched = { ...cached, priceHistory: priceResult.priceHistory };
+          await cacheService.set(cacheKey, enriched, 3600);
+          return enriched;
+        }
+      }
       logger.info(`Cache hit for combined stock data: ${symbol} (language: ${language})`);
       return cached;
     }
@@ -208,13 +222,13 @@ class DataService {
 
     try {
       // Fetch in parallel with language
-      const [news, analysis, priceData] = await Promise.all([
+      const [news, analysis, priceResult] = await Promise.all([
         this.fetchStockNews(symbol, language),
         this.fetchFinancialAnalysis(symbol, language),
         this.fetchPriceHistory(symbol)
       ]);
 
-      const stockData: StockData = priceData || {
+      const stockData: StockData = priceResult.stockData || {
         symbol,
         currentPrice: 0,
         previousClose: 0,
@@ -229,6 +243,7 @@ class DataService {
         stockData,
         news,
         analysis,
+        priceHistory: priceResult.priceHistory,
         fetchedAt: new Date().toISOString()
       };
 
@@ -353,6 +368,99 @@ class DataService {
     }
 
     return label;
+  }
+
+  private normalizePriceHistory(
+    history: RawPriceHistoryResponse['price_history'] | undefined
+  ): PriceHistoryMap {
+    const normalized: PriceHistoryMap = {};
+    if (!history) {
+      return normalized;
+    }
+
+    for (const [range, series] of Object.entries(history)) {
+      if (!series || !Array.isArray(series.prices) || !Array.isArray(series.labels)) {
+        continue;
+      }
+
+      const length = Math.min(series.prices.length, series.labels.length);
+      if (length < 2) {
+        continue;
+      }
+
+      const labels: string[] = [];
+      const prices: number[] = [];
+
+      for (let i = 0; i < length; i += 1) {
+        const rawPrice = series.prices[i];
+        const price = typeof rawPrice === 'number' ? rawPrice : Number(rawPrice);
+        if (!Number.isFinite(price)) {
+          continue;
+        }
+        const rawLabel = series.labels[i];
+        const label = rawLabel === undefined || rawLabel === null ? '' : String(rawLabel);
+        if (!label) {
+          continue;
+        }
+        labels.push(this.parseTradingDate(label));
+        prices.push(price);
+      }
+
+      if (labels.length > 1) {
+        normalized[range] = { labels, prices };
+      }
+    }
+
+    return normalized;
+  }
+
+  private selectPreferredHistory(
+    history: PriceHistoryMap
+  ): { key: string; series: PriceHistorySeries } | null {
+    for (const key of this.PRICE_HISTORY_PRIORITY) {
+      if (history[key]) {
+        return { key, series: history[key] };
+      }
+    }
+
+    const entries = Object.entries(history);
+    if (entries.length === 0) {
+      return null;
+    }
+
+    entries.sort((a, b) => (b[1].prices?.length || 0) - (a[1].prices?.length || 0));
+    return { key: entries[0][0], series: entries[0][1] };
+  }
+
+  private deriveStockDataFromHistory(symbol: string, history: PriceHistoryMap): StockData | null {
+    const selected = this.selectPreferredHistory(history);
+    if (!selected) {
+      return null;
+    }
+
+    const { series } = selected;
+    const prices = series.prices;
+    const labels = series.labels;
+
+    if (!Array.isArray(prices) || prices.length === 0) {
+      return null;
+    }
+
+    const currentPrice = prices[prices.length - 1] || 0;
+    const previousClose = prices.length > 1 ? prices[prices.length - 2] : currentPrice;
+    const priceChange = currentPrice - previousClose;
+    const priceChangePercent = previousClose ? (priceChange / previousClose) * 100 : 0;
+    const tradingDate = this.parseTradingDate(labels?.[labels.length - 1]);
+
+    return {
+      symbol,
+      currentPrice,
+      previousClose,
+      priceChange,
+      priceChangePercent,
+      tradingDate,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**

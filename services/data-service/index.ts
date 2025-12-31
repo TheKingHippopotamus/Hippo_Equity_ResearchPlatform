@@ -151,6 +151,60 @@ app.get('/stock/:symbol', async (req: Request, res: Response) => {
   }
 });
 
+// Get stock price history
+app.get('/stock/:symbol/history', async (req: Request, res: Response) => {
+  try {
+    const { symbol } = req.params;
+    const range = (req.query.range as string | undefined)?.toUpperCase();
+
+    if (!symbol || typeof symbol !== 'string') {
+      return res.status(400).json({
+        error: 'Invalid symbol',
+        message: 'Stock symbol is required'
+      });
+    }
+
+    const history = await dataService.fetchPriceHistorySeries(symbol.toUpperCase());
+    const availableRanges = Object.keys(history).sort();
+
+    if (range) {
+      const series = history[range];
+      if (!series) {
+        return res.status(404).json({
+          error: 'Range not available',
+          message: `No price history found for range ${range}`,
+          symbol: symbol.toUpperCase(),
+          availableRanges
+        });
+      }
+
+      return res.json({
+        symbol: symbol.toUpperCase(),
+        range,
+        series,
+        availableRanges,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    return res.json({
+      symbol: symbol.toUpperCase(),
+      priceHistory: history,
+      availableRanges,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Error fetching price history: ${errorMessage}`);
+
+    res.status(500).json({
+      error: 'Failed to fetch price history',
+      message: 'An error occurred while fetching price history. Please try again later.',
+      symbol: req.params.symbol
+    });
+  }
+});
+
 // Initialize Redis connection and start server
 async function startServer() {
   try {

@@ -1,8 +1,27 @@
-# Container Error Remediation Documentation
+# MISSION : Container Error Remediation Documentation
 
-Date: 2025-12-29
-Owner: Codex (on request)
-Scope: Hippo Equity Research App container failures and unhealthy services
+**Agent:** Fixaroo  
+**Tribe:** Cursor  
+**Role:** Container Debugger  
+**Date:** 2025-12-29  
+**Owner:** Codex (on request)  
+**Scope:** Hippo Equity Research App container failures and unhealthy services  
+
+---
+
+## Table of Contents
+
+1. [Objective](#objective)
+2. [Initial Symptoms](#initial-symptoms)
+3. [Root Causes Identified](#root-causes-identified)
+4. [Fixes Applied](#fixes-applied)
+5. [Commands Executed (high level)](#commands-executed-high-level)
+6. [Current Status](#current-status)
+7. [Residual Warnings](#residual-warnings)
+8. [Files Modified](#files-modified)
+9. [Follow-Up Recommendations](#follow-up-recommendations)
+
+---
 
 ## Objective
 Stabilize all containers, eliminate restart loops, and restore healthy status across the stack.
@@ -69,4 +88,3 @@ All services are up and healthy:
 ## Follow-Up Recommendations
 - Replace dev SSL certs with proper non-CA self-signed cert or production certs.
 - Add `SSLSessionCache` configuration if SSL warnings should be eliminated.
-

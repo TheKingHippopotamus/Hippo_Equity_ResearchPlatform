@@ -108,7 +108,7 @@ class CacheService {
    */
   generateKey(
     symbol: string, 
-    dataType: 'news' | 'analysis' | 'combined' | 'price' = 'combined',
+    dataType: 'news' | 'analysis' | 'combined' | 'price' | 'price-history' = 'combined',
     language: string = 'en'
   ): string {
     return `stock:${symbol}:${dataType}:${language}`;

@@ -7,3 +7,4 @@ export { LanguageSelector } from './LanguageSelector/LanguageSelector';
 export { AutopilotQueue } from './AutopilotQueue/AutopilotQueue';
 export { PDFReportButton } from './PDFReportButton/PDFReportButton';
 export { PDFReportBuilder } from './PDFReportBuilder/PDFReportBuilder';
+export { ThemeToggle } from './ThemeToggle/ThemeToggle';
