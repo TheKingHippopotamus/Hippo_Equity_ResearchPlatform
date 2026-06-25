@@ -40,5 +40,11 @@ logs/
 tmp/
 temp/
 
-.plan/  
+.plan/
 /docker/apache/ssl/
+
+# Local-only private documentation (contains real data-source identifiers — never commit)
+private-docs/
+
+# Claude Code local config / memory — keep out of the public repo
+.claude/
