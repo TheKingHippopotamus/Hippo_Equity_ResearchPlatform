@@ -30,6 +30,12 @@
 
 ---
 
+> [!WARNING]
+> 💡 **This software does not ship with a data provider.**
+> All market-data endpoints are read from environment variables only — **no data source is bundled, hardcoded, or implied anywhere in this repository.** To run with live data you must supply your own provider endpoints in `.env` (see [`.env.example`](./.env.example)). Without them the services start normally, but data fetching returns empty.
+
+---
+
 ##  Table of Contents
 
 - [Overview](#-overview)
