@@ -24,15 +24,25 @@ import { normalizeData } from './normalizationService.js';
  */
 class DataService {
   private readonly API_BASE_URL: string;
+  private readonly REALTIME_API_URL: string;
   private readonly MAX_RETRIES = 3;
   private readonly RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff: 1s, 2s, 4s
   private readonly API_KEY: string | undefined;
   private readonly PRICE_HISTORY_PRIORITY = ['1M', '1Y', '10Y', '1D'];
 
   constructor() {
-    // Public API - no API key required
-    this.API_BASE_URL = process.env.DATA_PROVIDER_API_URL || 'https://provider.example';
+    // Provider endpoints are injected via environment only — no source is hardcoded.
+    // See .env.example for the required variables (obtain real values from the maintainer).
+    this.API_BASE_URL = process.env.DATA_PROVIDER_API_URL || '';
+    this.REALTIME_API_URL = process.env.REALTIME_API_URL || '';
     this.API_KEY = process.env.DATA_PROVIDER_API_KEY;
+
+    if (!this.API_BASE_URL) {
+      logger.warn('DATA_PROVIDER_API_URL is not set — data fetching will fail until it is configured in .env');
+    }
+    if (!this.REALTIME_API_URL) {
+      logger.warn('REALTIME_API_URL is not set — realtime quotes will fail until it is configured in .env');
+    }
   }
 
   /**
@@ -55,7 +65,7 @@ class DataService {
     logger.info(`Fetching stock news for symbol: ${symbol} (language: ${language})`);
 
     try {
-      // Public API endpoint: https://provider.example/api/stock-news/<ticker>
+      // Endpoint: <DATA_PROVIDER_API_URL>/api/stock-news/<ticker>
       const response = await this.fetchWithRetry<RawStockNewsResponse>(
         `${this.API_BASE_URL}/api/stock-news/${symbol}`
       );
@@ -106,7 +116,7 @@ class DataService {
     logger.info(`Fetching financial analysis for symbol: ${symbol} (language: ${language})`);
 
     try {
-      // Public API endpoint: https://provider.example/api/quote/<ticker>/financial-analysis
+      // Endpoint: <DATA_PROVIDER_API_URL>/api/quote/<ticker>/financial-analysis
       const response = await this.fetchWithRetry<RawFinancialAnalysisResponse>(
         `${this.API_BASE_URL}/api/quote/${symbol}/financial-analysis`
       );
@@ -152,14 +162,21 @@ class DataService {
     ]);
 
     if (cachedHistory) {
+      const sanitizedHistory = this.normalizePriceHistory(cachedHistory);
+      const historyToUse = Object.keys(sanitizedHistory).length > 0 ? sanitizedHistory : cachedHistory;
+
+      if (historyToUse !== cachedHistory) {
+        await cacheService.set(historyKey, historyToUse, 3600);
+      }
+
       if (!cachedPrice) {
-        const derived = this.deriveStockDataFromHistory(symbol, cachedHistory);
+        const derived = this.deriveStockDataFromHistory(symbol, historyToUse);
         if (derived) {
           await cacheService.set(priceKey, derived, 3600);
         }
-        return { stockData: derived, priceHistory: cachedHistory };
+        return { stockData: derived, priceHistory: historyToUse };
       }
-      return { stockData: cachedPrice, priceHistory: cachedHistory };
+      return { stockData: cachedPrice, priceHistory: historyToUse };
     }
 
     try {
@@ -191,6 +208,22 @@ class DataService {
   async fetchPriceHistorySeries(symbol: string): Promise<PriceHistoryMap> {
     const result = await this.fetchPriceHistory(symbol);
     return result.priceHistory || {};
+  }
+
+  async fetchRealtimeInstrument(instrumentId: string, domainId: string = '1'): Promise<Record<string, unknown>> {
+    const trimmedInstrumentId = instrumentId.trim();
+    if (!trimmedInstrumentId) {
+      throw new Error('Instrument ID is required for realtime lookup');
+    }
+
+    const url = `${this.REALTIME_API_URL}/pd-instruments/v1/instruments/${trimmedInstrumentId}`;
+    const response = await axios.get<Record<string, unknown>>(url, {
+      params: { domain_id: domainId },
+      timeout: 10000,
+      headers: { Accept: 'application/json' },
+    });
+
+    return response.data;
   }
 
   /**
@@ -347,27 +380,164 @@ class DataService {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  private parseTradingDate(label: string | undefined): string {
+  private parsePriceValue(raw: unknown): number | null {
+    if (typeof raw === 'number') {
+      return Number.isFinite(raw) ? raw : null;
+    }
+
+    if (typeof raw !== 'string') {
+      return null;
+    }
+
+    let value = raw.trim();
+    if (!value) {
+      return null;
+    }
+
+    let sign = 1;
+    if (value.startsWith('(') && value.endsWith(')')) {
+      sign = -1;
+      value = value.slice(1, -1);
+    }
+
+    value = value.replace(/[$,\s]/g, '').replace(/%/g, '');
+
+    const match = value.match(/^(-?\d*\.?\d+)([kKmMbBtT])?$/);
+    if (!match) {
+      const cleaned = value.replace(/[^0-9.\-]/g, '');
+      const fallback = Number(cleaned);
+      return Number.isFinite(fallback) ? sign * fallback : null;
+    }
+
+    const base = Number(match[1]);
+    if (!Number.isFinite(base)) {
+      return null;
+    }
+
+    const suffix = match[2]?.toLowerCase();
+    let multiplier = 1;
+    switch (suffix) {
+      case 'k':
+        multiplier = 1e3;
+        break;
+      case 'm':
+        multiplier = 1e6;
+        break;
+      case 'b':
+        multiplier = 1e9;
+        break;
+      case 't':
+        multiplier = 1e12;
+        break;
+      default:
+        multiplier = 1;
+        break;
+    }
+
+    return sign * base * multiplier;
+  }
+
+  private normalizeIsoDateLabel(label: string): string | null {
+    const match = label.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+      return null;
+    }
+
+    const [, yearRaw, monthRaw, dayRaw] = match;
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    const day = Number(dayRaw);
+
+    if (!Number.isFinite(year) || month < 1 || month > 12 || day < 1 || day > 31) {
+      return null;
+    }
+
+    const today = new Date();
+    const maxYear = today.getFullYear() + 1;
+    let adjustedYear = year;
+    if (year > maxYear) {
+      adjustedYear = year - 100;
+    }
+
+    const iso = `${String(adjustedYear).padStart(4, '0')}-${monthRaw}-${dayRaw}`;
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    return iso;
+  }
+
+  private parseTradingDate(label: string | undefined, includeTime: boolean = false): string {
     if (!label) {
       return new Date().toISOString().split('T')[0];
     }
 
-    if (label.includes(':')) {
+    const trimmed = label.trim();
+    if (!trimmed) {
       return new Date().toISOString().split('T')[0];
     }
 
-    const parts = label.split('/');
-    if (parts.length === 3) {
-      const [month, day, year] = parts;
-      const fullYear = year.length === 2 ? `20${year}` : year;
-      const iso = `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-      const parsed = new Date(iso);
+    const normalizedIso = this.normalizeIsoDateLabel(trimmed);
+    if (normalizedIso) {
+      return normalizedIso;
+    }
+
+    if (trimmed.includes(':')) {
+      const parsed = new Date(trimmed);
       if (!Number.isNaN(parsed.getTime())) {
-        return iso;
+        return includeTime ? parsed.toISOString() : parsed.toISOString().slice(0, 10);
+      }
+
+      const timeMatch = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?$/);
+      if (timeMatch) {
+        let hours = Number(timeMatch[1]);
+        const minutes = Number(timeMatch[2]);
+        const seconds = Number(timeMatch[3] || '0');
+        const meridiem = timeMatch[4]?.toLowerCase();
+
+        if (meridiem === 'pm' && hours < 12) {
+          hours += 12;
+        } else if (meridiem === 'am' && hours === 12) {
+          hours = 0;
+        }
+
+        const today = new Date().toISOString().slice(0, 10);
+        const combined = `${today}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}Z`;
+        const combinedParsed = new Date(combined);
+        if (!Number.isNaN(combinedParsed.getTime())) {
+          return includeTime ? combinedParsed.toISOString() : combinedParsed.toISOString().slice(0, 10);
+        }
+      }
+
+      return new Date().toISOString().split('T')[0];
+    }
+
+    const parts = trimmed.split('/');
+    if (parts.length === 3) {
+      const [monthRaw, dayRaw, yearRaw] = parts;
+      const month = Number(monthRaw);
+      const day = Number(dayRaw);
+      let year = Number(yearRaw);
+
+      if (Number.isFinite(month) && Number.isFinite(day) && Number.isFinite(year)) {
+        if (yearRaw.length === 2) {
+          const currentYear = new Date().getFullYear();
+          year = 2000 + year;
+          if (year > currentYear + 1) {
+            year -= 100;
+          }
+        }
+
+        const iso = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const parsed = new Date(iso);
+        if (!Number.isNaN(parsed.getTime())) {
+          return iso;
+        }
       }
     }
 
-    return label;
+    return trimmed;
   }
 
   private normalizePriceHistory(
@@ -393,8 +563,8 @@ class DataService {
 
       for (let i = 0; i < length; i += 1) {
         const rawPrice = series.prices[i];
-        const price = typeof rawPrice === 'number' ? rawPrice : Number(rawPrice);
-        if (!Number.isFinite(price)) {
+        const price = this.parsePriceValue(rawPrice);
+        if (price === null || !Number.isFinite(price)) {
           continue;
         }
         const rawLabel = series.labels[i];
@@ -402,7 +572,7 @@ class DataService {
         if (!label) {
           continue;
         }
-        labels.push(this.parseTradingDate(label));
+        labels.push(this.parseTradingDate(label, true));
         prices.push(price);
       }
 

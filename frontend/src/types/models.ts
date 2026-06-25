@@ -139,6 +139,7 @@ export interface ReportSectionConfig {
   id: ReportSectionId;
   enabled: boolean;
   order: number;
+  mergeToPage?: number; // Page number to merge this section to (0-based, undefined = new page)
   options?: {
     newsCount?: number;
     newsMode?: ReportNewsMode;

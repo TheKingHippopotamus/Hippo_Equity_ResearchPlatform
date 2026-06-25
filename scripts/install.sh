@@ -47,7 +47,10 @@ REDIS_PASSWORD=change_me
 MINIO_ROOT_USER=change_me
 MINIO_ROOT_PASSWORD=change_me
 DATA_PROVIDER_API_KEY=change_me
-DATA_PROVIDER_API_URL=https://provider.example
+DATA_PROVIDER_API_URL=change_me
+REALTIME_API_URL=change_me
+REALTIME_INSTRUMENT_ID=change_me
+REALTIME_DOMAIN_ID=1
 EOF
     fi
 else

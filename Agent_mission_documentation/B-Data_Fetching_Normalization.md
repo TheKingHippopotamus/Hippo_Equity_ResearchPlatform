@@ -42,7 +42,7 @@ Implement the Data Service with complete API integration, data normalization, an
 
 ### Key Features
 
-1. **API Integration** - Fetch stock news and financial analysis from data provider API
+1. **API Integration** - Fetch stock news and financial analysis from the data-provider API
 2. **Retry Logic** - Exponential backoff retry (1s, 2s, 4s) with max 3 attempts
 3. **Data Normalization** - Transform raw API responses to internal schema
 4. **Redis Caching** - TTL-based caching with fallback to stale cache
@@ -84,7 +84,7 @@ The Data Service follows a **layered architecture** with clear separation of con
 │                    Infrastructure Layer                      │
 │  ┌──────────────────┐  ┌──────────────────┐                 │
 │  │  Redis Client    │  │  External API    │                 │
-│  │  - Connection    │  │  - data provider API  │                 │
+│  │  - Connection    │  │  - the data-provider API  │                 │
 │  │  - Health Check  │  │  - Stock News    │                 │
 │  └──────────────────┘  │  - Analysis      │                 │
 │                        └──────────────────┘                 │
@@ -135,7 +135,7 @@ The Data Service follows a **layered architecture** with clear separation of con
 
 The DataService serves as the main orchestrator for data fetching, providing:
 
-1. **API Integration** - Fetches data from data provider API endpoints
+1. **API Integration** - Fetches data from the data-provider API endpoints
 2. **Retry Logic** - Exponential backoff with max 3 attempts
 3. **Caching Integration** - Checks cache before API calls
 4. **Error Handling** - Graceful fallback to stale cache
@@ -152,7 +152,7 @@ class DataService {
   private readonly RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff: 1s, 2s, 4s
 
   constructor() {
-    this.API_BASE_URL = process.env.API_BASE_URL || 'https://api.provider.example';
+    this.API_BASE_URL = process.env.DATA_PROVIDER_API_URL;
     this.API_KEY = process.env.API_KEY || '';
     
     if (!this.API_KEY) {
@@ -669,8 +669,8 @@ export interface ProcessedStockData {
 
 ### External API Endpoints
 
-**data provider API:**
-- **Base URL:** `https://api.provider.example` (configurable via `API_BASE_URL`)
+**the data-provider API:**
+- **Base URL:** `<DATA_PROVIDER_API_URL>` (configurable via `API_BASE_URL`)
 - **Stock News:** `GET /api/stock-news?symbol={symbol}`
 - **Financial Analysis:** `GET /api/quote/financial-analysis?symbol={symbol}`
 
@@ -908,7 +908,7 @@ module.exports = {
 ### What Was Built
 
 1. **DataService Implementation**
-   - ✅ API integration with data provider API
+   - ✅ API integration with the data-provider API
    - ✅ Exponential backoff retry logic (1s, 2s, 4s, max 3 attempts)
    - ✅ Cache-first strategy with Redis
    - ✅ Parallel fetching for combined data

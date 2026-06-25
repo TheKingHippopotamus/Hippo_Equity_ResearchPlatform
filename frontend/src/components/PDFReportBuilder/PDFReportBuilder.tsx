@@ -481,6 +481,34 @@ export const PDFReportBuilder: React.FC<PDFReportBuilderProps> = (props) => {
                           </label>
                         </div>
                       )}
+
+                      {section.enabled && (
+                        <div className="pdf-builder-merge-option">
+                          <label>
+                            Merge to page
+                            <select
+                              value={section.mergeToPage ?? ''}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setSections((prev) =>
+                                  prev.map((s) =>
+                                    s.id === section.id
+                                      ? { ...s, mergeToPage: value ? Number(value) : undefined }
+                                      : s
+                                  )
+                                );
+                              }}
+                            >
+                              <option value="">New page</option>
+                              {Array.from({ length: estimatePages() }, (_, i) => (
+                                <option key={i} value={i}>
+                                  Page {i + 1}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

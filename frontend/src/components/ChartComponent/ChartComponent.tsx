@@ -18,11 +18,12 @@ import {
   type ISeriesApi,
   type SeriesMarker,
   type Time,
+  type UTCTimestamp,
 } from 'lightweight-charts';
 import './ChartComponent.css';
 
 export type ChartType = 'line' | 'bar' | 'area' | 'baseline' | 'dots';
-type TimeframeId = '1W' | '1M' | '3M' | '6M' | '1Y' | 'ALL';
+type TimeframeId = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y' | 'ALL';
 type BaselineSource = 'zero' | 'first' | 'last' | 'average' | 'median';
 
 export interface ChartDataPoint {
@@ -44,6 +45,7 @@ type ThemeId = 'light' | 'slate' | 'midnight';
 type LineWidthOption = 1 | 2 | 3 | 4;
 interface ChartComponentProps {
   data: ChartDataPoint[];
+  seriesByRange?: Partial<Record<TimeframeId, ChartDataPoint[]>>;
   type?: ChartType;
   timeRange?: string;
   title?: string;
@@ -88,6 +90,81 @@ const medianValue = (values: number[]) => {
   return sorted[middle];
 };
 
+const formatTimeLabel = (input: Time) => {
+  if (typeof input === 'number') {
+    const parsed = new Date(input * 1000);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().replace('T', ' ').slice(0, 16);
+    }
+    return '';
+  }
+
+  if (typeof input === 'string') {
+    if (input.includes('T') || input.includes(':')) {
+      const parsed = new Date(input);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().replace('T', ' ').slice(0, 16);
+      }
+    }
+    return input;
+  }
+
+  if (input && typeof input === 'object') {
+    const { year, month, day } = input;
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  return '';
+};
+
+type ChartSeriesPoint = { time: Time; value: number; sortKey: number };
+
+const parseChartTime = (value: string): { time: Time; sortKey: number } | null => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = new Date(trimmed);
+  if (!Number.isNaN(parsed.getTime())) {
+    const hasTime = trimmed.includes('T') || trimmed.includes(':');
+    if (hasTime) {
+      const ms = parsed.getTime();
+      return { time: Math.floor(ms / 1000) as UTCTimestamp, sortKey: ms };
+    }
+    const isoDate = parsed.toISOString().slice(0, 10);
+    const midnightMs = Date.parse(`${isoDate}T00:00:00Z`);
+    if (!Number.isNaN(midnightMs)) {
+      return { time: Math.floor(midnightMs / 1000) as UTCTimestamp, sortKey: midnightMs };
+    }
+  }
+
+  const numeric = Number(trimmed);
+  if (Number.isFinite(numeric)) {
+    const ms = numeric > 1e12 ? numeric : numeric * 1000;
+    const numericParsed = new Date(ms);
+    if (!Number.isNaN(numericParsed.getTime())) {
+      return { time: Math.floor(ms / 1000) as UTCTimestamp, sortKey: ms };
+    }
+  }
+
+  return null;
+};
+
+const buildSeriesData = (points: ChartDataPoint[]): ChartSeriesPoint[] => {
+  const mapped = points
+    .map((point) => {
+      const timeData = parseChartTime(point.date);
+      if (!timeData) {
+        return null;
+      }
+      return { ...timeData, value: point.value };
+    })
+    .filter((point): point is ChartSeriesPoint => point !== null);
+
+  return mapped.sort((a, b) => a.sortKey - b.sortKey);
+};
+
 const toIsoDate = (input: Time) => {
   if (typeof input === 'string') {
     const parsed = new Date(input);
@@ -116,6 +193,14 @@ const toIsoDate = (input: Time) => {
   return null;
 };
 
+const dayStringToTimestamp = (isoDay: string): UTCTimestamp | null => {
+  const ms = Date.parse(`${isoDay}T00:00:00Z`);
+  if (Number.isNaN(ms)) {
+    return null;
+  }
+  return Math.floor(ms / 1000) as UTCTimestamp;
+};
+
 const sentimentToColor = (value?: number) => {
   if (value === undefined || value === null || Number.isNaN(value)) {
     return '#94a3b8';
@@ -133,6 +218,7 @@ const sentimentToColor = (value?: number) => {
 };
 
 const TIMEFRAMES: Array<{ id: TimeframeId; label: string; days?: number }> = [
+  { id: '1D', label: '1D', days: 1 },
   { id: '1W', label: '1W', days: 7 },
   { id: '1M', label: '1M', days: 30 },
   { id: '3M', label: '3M', days: 90 },
@@ -184,13 +270,14 @@ const CHART_THEMES: Record<
 
 export const ChartComponent: React.FC<ChartComponentProps> = ({
   data,
+  seriesByRange,
   type = 'line',
   timeRange,
   title,
-  xAxisLabel,
-  yAxisLabel,
+  xAxisLabel = 'Date',
+  yAxisLabel = 'Price (USD)',
   color,
-  newsItems,
+  newsItems = [],
 }) => {
   const resolvedColor =
     color ||
@@ -249,34 +336,50 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
     items: ChartNewsItem[];
   } | null>(null);
   const lastNewsDateRef = useRef<string | null>(null);
+  const allSeriesData = useMemo(() => buildSeriesData(data), [data]);
+  const seriesByRangeData = useMemo(() => {
+    if (!seriesByRange) {
+      return {} as Partial<Record<TimeframeId, ChartSeriesPoint[]>>;
+    }
+    const entries = Object.entries(seriesByRange).reduce((acc, [key, points]) => {
+      if (Array.isArray(points)) {
+        acc[key as TimeframeId] = buildSeriesData(points);
+      }
+      return acc;
+    }, {} as Partial<Record<TimeframeId, ChartSeriesPoint[]>>);
+    return entries;
+  }, [seriesByRange]);
+
   const seriesData = useMemo(() => {
-    const mapped = data
-      .map((point) => {
-        const parsedDate = new Date(point.date);
-        if (Number.isNaN(parsedDate.getTime())) {
-          return null;
-        }
-        const date = parsedDate.toISOString().slice(0, 10);
-        return { time: date, value: point.value };
-      })
-      .filter((point): point is { time: string; value: number } => point !== null);
-    return mapped.sort((a, b) => a.time.localeCompare(b.time));
-  }, [data]);
+    const rangeData = seriesByRangeData[activeRange];
+    if (rangeData && rangeData.length > 0) {
+      return rangeData;
+    }
+    return allSeriesData;
+  }, [activeRange, allSeriesData, seriesByRangeData]);
 
   const availableRanges = useMemo(() => {
-    if (seriesData.length < 2) {
+    const fallbackSeries =
+      allSeriesData.length > 1
+        ? allSeriesData
+        : Object.values(seriesByRangeData).find((series) => series && series.length > 1) || [];
+    if (fallbackSeries.length < 2) {
       return TIMEFRAMES.map((range) => ({ ...range, enabled: range.id === 'ALL' }));
     }
 
-    const start = new Date(seriesData[0].time);
-    const end = new Date(seriesData[seriesData.length - 1].time);
-    const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
+    const startKey = fallbackSeries[0]?.sortKey || 0;
+    const endKey = fallbackSeries[fallbackSeries.length - 1]?.sortKey || 0;
+    const totalDays = Math.max(1, Math.round((endKey - startKey) / 86400000));
 
     return TIMEFRAMES.map((range) => ({
       ...range,
-      enabled: range.days ? range.days <= totalDays : true,
+      enabled: seriesByRangeData[range.id]?.length
+        ? (seriesByRangeData[range.id]?.length || 0) > 1
+        : range.days
+          ? range.days <= totalDays
+          : true,
     }));
-  }, [seriesData]);
+  }, [allSeriesData, seriesByRangeData]);
 
   const filteredSeriesData = useMemo(() => {
     if (activeRange === 'ALL' || seriesData.length === 0) {
@@ -288,10 +391,9 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
       return seriesData;
     }
 
-    const endDate = new Date(seriesData[seriesData.length - 1].time);
-    const startDate = new Date(endDate);
-    startDate.setDate(endDate.getDate() - range.days);
-    return seriesData.filter((point) => new Date(point.time) >= startDate);
+    const endKey = seriesData[seriesData.length - 1].sortKey;
+    const startKey = endKey - range.days * 86400000;
+    return seriesData.filter((point) => point.sortKey >= startKey);
   }, [activeRange, seriesData]);
 
   const visibleRange = useMemo(() => {
@@ -303,6 +405,20 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
       end: filteredSeriesData[filteredSeriesData.length - 1].time,
     };
   }, [filteredSeriesData]);
+
+  const computedTimeRange = useMemo(() => {
+    if (!visibleRange) {
+      return '';
+    }
+    const startLabel = formatTimeLabel(visibleRange.start);
+    const endLabel = formatTimeLabel(visibleRange.end);
+    if (!startLabel || !endLabel) {
+      return '';
+    }
+    return `${startLabel} → ${endLabel}`;
+  }, [visibleRange]);
+
+  const effectiveTimeRange = timeRange || computedTimeRange;
 
   const baselineValue = useMemo(() => {
     if (filteredSeriesData.length === 0) {
@@ -334,12 +450,15 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
       return map;
     }
 
+    const startDay = visibleRange ? toIsoDate(visibleRange.start) : null;
+    const endDay = visibleRange ? toIsoDate(visibleRange.end) : null;
+
     newsItems.forEach((item) => {
       const date = toIsoDate(item.publishedAt);
       if (!date) {
         return;
       }
-      if (visibleRange && (date < visibleRange.start || date > visibleRange.end)) {
+      if (startDay && endDay && (date < startDay || date > endDay)) {
         return;
       }
       const existing = map.get(date) || [];
@@ -356,13 +475,17 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
     }
     const markers: SeriesMarker<Time>[] = [];
     newsByDate.forEach((items, date) => {
+      const markerTime = dayStringToTimestamp(date);
+      if (!markerTime) {
+        return;
+      }
       const sentiments = items
         .map((item) => item.sentiment)
         .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
       const averageSentiment =
         sentiments.length > 0 ? sentiments.reduce((sum, value) => sum + value, 0) / sentiments.length : undefined;
       markers.push({
-        time: date,
+        time: markerTime,
         position: 'aboveBar',
         shape: 'circle',
         color: sentimentToColor(averageSentiment),
@@ -741,7 +864,7 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
 
   useEffect(() => {
     if (seriesRef.current) {
-      seriesRef.current.setData(filteredSeriesData);
+      seriesRef.current.setData(filteredSeriesData.map(({ time, value }) => ({ time, value })));
       chartRef.current?.timeScale().fitContent();
     }
   }, [filteredSeriesData, activeType]);
@@ -756,10 +879,10 @@ export const ChartComponent: React.FC<ChartComponentProps> = ({
 
   return (
     <div className="chart-component card">
-      {(title || timeRange) && (
+      {(title || effectiveTimeRange) && (
         <div className="chart-header">
           {title && <h3 className="chart-title">{title}</h3>}
-          {timeRange && <span className="chart-time-range">{timeRange}</span>}
+          {effectiveTimeRange && <span className="chart-time-range">{effectiveTimeRange}</span>}
         </div>
       )}
       <div className="chart-toolbar">

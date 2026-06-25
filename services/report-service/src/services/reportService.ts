@@ -3,6 +3,8 @@ type PDFDocumentType = InstanceType<typeof PDFDocument>;
 import { createCanvas, loadImage, CanvasRenderingContext2D } from 'canvas';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import path from 'path';
 import logger from '../utils/logger.js';
 import translationClient from '../config/translationClient.js';
 import {
@@ -47,6 +49,7 @@ interface ReportTheme {
  */
 class ReportService {
   private readonly DATA_SERVICE_URL: string;
+  private readonly STATIC_ASSETS_PATH: string;
   private readonly BRAND_COLOR = '#1a73e8'; // Primary brand color
   private readonly BRAND_COLOR_LIGHT = '#e8f0fe'; // Light brand color
   private readonly FONT_SIZE_TITLE = 24;
@@ -58,6 +61,28 @@ class ReportService {
 
   constructor() {
     this.DATA_SERVICE_URL = process.env.DATA_SERVICE_URL || 'http://data-service:3001';
+    this.STATIC_ASSETS_PATH = this.resolveStaticAssetsPath();
+  }
+
+  private resolveStaticAsset(relativePath: string): string {
+    const trimmedPath = relativePath.replace(/^\/+/, '');
+    return `${this.STATIC_ASSETS_PATH}/${trimmedPath}`;
+  }
+
+  private resolveStaticAssetsPath(): string {
+    const envPath = process.env.STATIC_ASSETS_PATH;
+    if (envPath) {
+      return envPath.replace(/\/+$/, '');
+    }
+
+    const candidatePaths = [
+      path.resolve(process.cwd(), 'frontend/public/static'),
+      path.resolve(process.cwd(), '../frontend/public/static'),
+      path.resolve(process.cwd(), '../../frontend/public/static'),
+      '/app/static',
+    ];
+    const resolvedPath = candidatePaths.find((candidate) => fs.existsSync(candidate));
+    return (resolvedPath || '/app/static').replace(/\/+$/, '');
   }
 
   /**
@@ -115,13 +140,32 @@ class ReportService {
         .sort((a, b) => a.order - b.order);
       const hasCompanyOverview = enabledSections.some((section) => section.id === 'companyOverview');
 
+      // Track page numbers for merge functionality
+      let currentPageNumber = 0;
+      const pageMap = new Map<number, number>(); // Maps section order to page number
+
       let isFirstSection = true;
       for (const section of enabledSections) {
-        const startsNewPage = !isFirstSection && this.sectionStartsOnNewPage(section.id);
+        // Determine if we should start a new page
+        const shouldMergeToPage = section.mergeToPage !== undefined;
+        const startsNewPage = !isFirstSection && !shouldMergeToPage && this.sectionStartsOnNewPage(section.id);
         const isAtTop = doc.y <= this.MARGIN + 1;
-        if (startsNewPage && !isAtTop) {
+        
+        if (shouldMergeToPage) {
+          // Merge to specific page - add page if needed
+          const targetPage = section.mergeToPage ?? 0;
+          if (targetPage > currentPageNumber) {
+            for (let i = currentPageNumber; i < targetPage; i += 1) {
+              doc.addPage();
+              currentPageNumber += 1;
+            }
+          }
+        } else if (startsNewPage && !isAtTop) {
           doc.addPage();
+          currentPageNumber += 1;
         }
+
+        pageMap.set(enabledSections.indexOf(section), currentPageNumber);
 
         switch (section.id) {
           case 'cover':
@@ -535,13 +579,15 @@ class ReportService {
     language: SupportedLanguage,
     theme: ReportTheme
   ): Promise<void> {
-    // Try to include logo (placeholder for now)
-    // In production, this would fetch from MinIO or external URL
+    // Try to include logos
     if (theme.coverShowLogo) {
       try {
-        // await this.includeLogo(doc, stockData.symbol);
+        // Add Hippo logo on the left
+        await this.includeHippoLogo(doc);
+        // Add company ticker logo on the right
+        await this.includeTickerLogo(doc, stockData.symbol);
       } catch (error) {
-        logger.warn('Logo inclusion failed, continuing without logo');
+        logger.warn('Logo inclusion failed, continuing without logos');
       }
     }
 
@@ -607,6 +653,42 @@ class ReportService {
          }
        );
 
+  }
+
+  /**
+   * Include Hippo logo in PDF
+   */
+  private async includeHippoLogo(doc: PDFDocumentType): Promise<void> {
+    try {
+      const logoPath = this.resolveStaticAsset('logo.png');
+      doc.image(logoPath, this.MARGIN, 50, {
+        width: 80,
+        height: 80,
+        fit: [80, 80],
+      });
+      logger.info('Hippo logo included successfully');
+    } catch (error) {
+      logger.warn(`Failed to include Hippo logo: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Include ticker logo in PDF
+   */
+  private async includeTickerLogo(doc: PDFDocumentType, symbol: string): Promise<void> {
+    try {
+      const logoPath = this.resolveStaticAsset(`ticker_logos/${symbol.toUpperCase()}.png`);
+      doc.image(logoPath, this.PAGE_WIDTH - this.MARGIN - 80, 50, {
+        width: 80,
+        height: 80,
+        fit: [80, 80],
+      });
+      logger.info(`Ticker logo for ${symbol} included successfully`);
+    } catch (error) {
+      logger.warn(`Failed to include ticker logo for ${symbol}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Don't throw - ticker logo is optional
+    }
   }
 
   /**
@@ -952,18 +1034,23 @@ class ReportService {
     theme: ReportTheme,
     chartType: ReportChartType = 'line'
   ): Promise<void> {
+    // Use extended price history if available (90 days instead of 30)
     const tradingDate = this.parseTradingDate(stockData.stockData.tradingDate);
-    const labels = this.buildDateLabels(tradingDate, 30);
+    const daysToShow = 90; // Extended from 30 to 90 days for better trend visualization
+    const labels = this.buildDateLabels(tradingDate, daysToShow);
     const values = this.buildPriceSeries(
       stockData.stockData.previousClose,
       stockData.stockData.currentPrice,
       labels.length
     );
 
+    // Apply smoothing to reduce noise and show true movement
+    const smoothedValues = this.applySmoothingFilter(values, 5); // 5-day moving average
+
     const chartData: ChartData = {
       labels,
-      values,
-      title: 'Price History',
+      values: smoothedValues,
+      title: 'Price History (90-Day Trend)',
       type: chartType,
     };
 
@@ -1061,10 +1148,10 @@ class ReportService {
   }
 
   /**
-   * Draw line chart on canvas
+   * Draw line chart on canvas - Professional version with smooth curves
    */
   private drawLineChart(ctx: CanvasRenderingContext2D, chart: ChartData, theme: ReportTheme): void {
-    const padding = 40;
+    const padding = 50;
     const chartWidth = 500 - 2 * padding;
     const chartHeight = 300 - 2 * padding - 20;
     const startX = padding;
@@ -1072,16 +1159,106 @@ class ReportService {
 
     if (chart.values.length === 0) return;
 
-    // Calculate scale
+    // Calculate scale with padding
     const minValue = Math.min(...chart.values);
     const maxValue = Math.max(...chart.values);
     const range = maxValue - minValue || 1;
-    const scaleY = chartHeight / range;
+    const padding_percent = 0.1;
+    const adjustedMin = minValue - range * padding_percent;
+    const adjustedMax = maxValue + range * padding_percent;
+    const adjustedRange = adjustedMax - adjustedMin;
+    const scaleY = chartHeight / adjustedRange;
 
-    // Draw grid and axes
+    // Draw grid lines with better styling
     ctx.strokeStyle = theme.chartShowGrid ? '#e5e7eb' : 'transparent';
     ctx.lineWidth = 1;
-    const steps = 4;
+    const steps = 5;
+    for (let i = 0; i <= steps; i += 1) {
+      const y = startY + (chartHeight / steps) * i;
+      ctx.beginPath();
+      ctx.moveTo(startX, y);
+      ctx.lineTo(startX + chartWidth, y);
+      ctx.stroke();
+
+      // Add value labels on Y-axis
+      if (theme.chartShowGrid) {
+        const value = adjustedMax - (adjustedRange / steps) * i;
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '11px Helvetica';
+        ctx.textAlign = 'right';
+        ctx.fillText(value.toFixed(2), startX - 10, y + 4);
+      }
+    }
+
+    // Draw axes
+    ctx.strokeStyle = '#374151';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(startX, startY + chartHeight);
+    ctx.lineTo(startX + chartWidth, startY + chartHeight);
+    ctx.stroke();
+
+    // Draw smooth line with Bezier curves
+    ctx.strokeStyle = theme.brandColor;
+    ctx.lineWidth = theme.chartLineWidth + 0.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+
+    const points = chart.values.map((value, index) => ({
+      x: startX + (index / (chart.values.length - 1 || 1)) * chartWidth,
+      y: startY + chartHeight - (value - adjustedMin) * scaleY,
+    }));
+
+    // Draw smooth curve using quadratic Bezier
+    if (points.length > 0) {
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i += 1) {
+        const prev = points[i - 1];
+        const curr = points[i];
+        const next = points[i + 1];
+        const cpx = (curr.x + (next?.x || curr.x)) / 2;
+        const cpy = (curr.y + (next?.y || curr.y)) / 2;
+        ctx.quadraticCurveTo(curr.x, curr.y, cpx, cpy);
+      }
+      ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+    }
+    ctx.stroke();
+
+    // Draw data points with better styling
+    ctx.fillStyle = theme.brandColor;
+    points.forEach((point) => {
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
+      ctx.fill();
+      // Add white border to points
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+
+    // Add title
+    ctx.fillStyle = '#111827';
+    ctx.font = 'bold 14px Helvetica';
+    ctx.textAlign = 'center';
+    ctx.fillText(chart.title || 'Price History', startX + chartWidth / 2, startY - 20);
+  }
+
+  /**
+   * Draw bar chart on canvas - Professional version
+   */
+  private drawBarChart(ctx: CanvasRenderingContext2D, chart: ChartData, theme: ReportTheme): void {
+    const padding = 50;
+    const chartWidth = 500 - 2 * padding;
+    const chartHeight = 300 - 2 * padding - 20;
+    const startX = padding;
+    const startY = padding + 20;
+
+    // Draw grid lines
+    ctx.strokeStyle = theme.chartShowGrid ? '#e5e7eb' : 'transparent';
+    ctx.lineWidth = 1;
+    const steps = 5;
     for (let i = 0; i <= steps; i += 1) {
       const y = startY + (chartHeight / steps) * i;
       ctx.beginPath();
@@ -1090,57 +1267,80 @@ class ReportService {
       ctx.stroke();
     }
 
-    if (theme.chartShowGrid) {
-      ctx.strokeStyle = '#9ca3af';
+    // Draw axes
+    ctx.strokeStyle = '#374151';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(startX, startY + chartHeight);
+    ctx.lineTo(startX + chartWidth, startY + chartHeight);
+    ctx.stroke();
+
+    if (chart.values.length === 0) return;
+
+    // Calculate scale with padding
+    const minValue = Math.min(...chart.values);
+    const maxValue = Math.max(...chart.values);
+    const range = maxValue - minValue || 1;
+    const padding_percent = 0.1;
+    const adjustedMin = minValue - range * padding_percent;
+    const adjustedRange = (maxValue + range * padding_percent) - adjustedMin;
+    const scaleY = chartHeight / adjustedRange;
+
+    const barWidth = chartWidth / chart.values.length;
+    const barPadding = barWidth * 0.15;
+
+    // Draw bars with gradient effect
+    chart.values.forEach((value, index) => {
+      const x = startX + index * barWidth;
+      const barHeight = (value - adjustedMin) * scaleY;
+      const y = startY + chartHeight - barHeight;
+
+      // Draw bar with rounded corners
+      ctx.fillStyle = theme.brandColor;
+      ctx.globalAlpha = 0.8;
+      ctx.fillRect(x + barPadding, y, barWidth - 2 * barPadding, barHeight);
+      ctx.globalAlpha = 1;
+
+      // Add value label on top of bar
+      ctx.fillStyle = '#111827';
+      ctx.font = '10px Helvetica';
+      ctx.textAlign = 'center';
+      ctx.fillText(value.toFixed(2), x + barWidth / 2, y - 5);
+    });
+
+    // Add title
+    ctx.fillStyle = '#111827';
+    ctx.font = 'bold 14px Helvetica';
+    ctx.textAlign = 'center';
+    ctx.fillText(chart.title || 'Price History', startX + chartWidth / 2, startY - 20);
+  }
+
+  /**
+   * Draw area chart on canvas - Professional version with gradient
+   */
+  private drawAreaChart(ctx: CanvasRenderingContext2D, chart: ChartData, theme: ReportTheme): void {
+    const padding = 50;
+    const chartWidth = 500 - 2 * padding;
+    const chartHeight = 300 - 2 * padding - 20;
+    const startX = padding;
+    const startY = padding + 20;
+
+    // Draw grid lines
+    ctx.strokeStyle = theme.chartShowGrid ? '#e5e7eb' : 'transparent';
+    ctx.lineWidth = 1;
+    const steps = 5;
+    for (let i = 0; i <= steps; i += 1) {
+      const y = startY + (chartHeight / steps) * i;
       ctx.beginPath();
-      ctx.moveTo(startX, startY);
-      ctx.lineTo(startX, startY + chartHeight);
-      ctx.lineTo(startX + chartWidth, startY + chartHeight);
+      ctx.moveTo(startX, y);
+      ctx.lineTo(startX + chartWidth, y);
       ctx.stroke();
     }
 
-    // Draw line
-    ctx.strokeStyle = theme.brandColor;
-    ctx.lineWidth = theme.chartLineWidth;
-    ctx.beginPath();
-
-    chart.values.forEach((value, index) => {
-      const x = startX + (index / (chart.values.length - 1 || 1)) * chartWidth;
-      const y = startY + chartHeight - (value - minValue) * scaleY;
-
-      if (index === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
-    });
-
-    ctx.stroke();
-
-    // Draw data points
-    ctx.fillStyle = theme.brandColor;
-    chart.values.forEach((value, index) => {
-      const x = startX + (index / (chart.values.length - 1 || 1)) * chartWidth;
-      const y = startY + chartHeight - (value - minValue) * scaleY;
-      ctx.beginPath();
-      ctx.arc(x, y, 3, 0, 2 * Math.PI);
-      ctx.fill();
-    });
-  }
-
-  /**
-   * Draw bar chart on canvas
-   */
-  private drawBarChart(ctx: CanvasRenderingContext2D, chart: ChartData, theme: ReportTheme): void {
-    const padding = 40;
-    const chartWidth = 500 - 2 * padding;
-    const chartHeight = 300 - 2 * padding - 20;
-    const startX = padding;
-    const startY = padding + 20;
-
     // Draw axes
-    ctx.strokeStyle = theme.chartShowGrid ? '#cccccc' : 'transparent';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#374151';
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(startX, startY);
     ctx.lineTo(startX, startY + chartHeight);
@@ -1149,61 +1349,29 @@ class ReportService {
 
     if (chart.values.length === 0) return;
 
-    // Calculate scale
+    // Calculate scale with padding
     const minValue = Math.min(...chart.values);
     const maxValue = Math.max(...chart.values);
     const range = maxValue - minValue || 1;
-    const scaleY = chartHeight / range;
+    const padding_percent = 0.1;
+    const adjustedMin = minValue - range * padding_percent;
+    const adjustedMax = maxValue + range * padding_percent;
+    const adjustedRange = adjustedMax - adjustedMin;
+    const scaleY = chartHeight / adjustedRange;
 
-    const barWidth = chartWidth / chart.values.length;
-
-    // Draw bars
-    chart.values.forEach((value, index) => {
-      const x = startX + index * barWidth;
-      const barHeight = (value - minValue) * scaleY;
-      const y = startY + chartHeight - barHeight;
-
-      ctx.fillStyle = theme.brandColor;
-      ctx.fillRect(x + 5, y, barWidth - 10, barHeight);
-    });
-  }
-
-  /**
-   * Draw area chart on canvas
-   */
-  private drawAreaChart(ctx: CanvasRenderingContext2D, chart: ChartData, theme: ReportTheme): void {
-    // Similar to line chart but with filled area
-    const padding = 40;
-    const chartWidth = 500 - 2 * padding;
-    const chartHeight = 300 - 2 * padding - 20;
-    const startX = padding;
-    const startY = padding + 20;
-
-    // Draw axes
-    ctx.strokeStyle = theme.chartShowGrid ? '#cccccc' : 'transparent';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineTo(startX, startY + chartHeight);
-    ctx.lineTo(startX + chartWidth, startY + chartHeight);
-    ctx.stroke();
-
-    if (chart.values.length === 0) return;
-
-    // Calculate scale
-    const minValue = Math.min(...chart.values);
-    const maxValue = Math.max(...chart.values);
-    const range = maxValue - minValue || 1;
-    const scaleY = chartHeight / range;
+    // Create gradient for filled area
+    const gradient = ctx.createLinearGradient(0, startY, 0, startY + chartHeight);
+    gradient.addColorStop(0, theme.brandColor + '40'); // 25% opacity
+    gradient.addColorStop(1, theme.brandColor + '10'); // 6% opacity
 
     // Draw filled area
-    ctx.fillStyle = theme.chartShowGrid ? '#e8f0fe' : '#f3f4f6';
+    ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.moveTo(startX, startY + chartHeight);
 
     chart.values.forEach((value, index) => {
       const x = startX + (index / (chart.values.length - 1 || 1)) * chartWidth;
-      const y = startY + chartHeight - (value - minValue) * scaleY;
+      const y = startY + chartHeight - (value - adjustedMin) * scaleY;
       ctx.lineTo(x, y);
     });
 
@@ -1211,23 +1379,37 @@ class ReportService {
     ctx.closePath();
     ctx.fill();
 
-    // Draw line on top
+    // Draw line on top with smooth curves
     ctx.strokeStyle = theme.brandColor;
-    ctx.lineWidth = theme.chartLineWidth;
+    ctx.lineWidth = theme.chartLineWidth + 0.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.beginPath();
 
-    chart.values.forEach((value, index) => {
-      const x = startX + (index / (chart.values.length - 1 || 1)) * chartWidth;
-      const y = startY + chartHeight - (value - minValue) * scaleY;
+    const points = chart.values.map((value, index) => ({
+      x: startX + (index / (chart.values.length - 1 || 1)) * chartWidth,
+      y: startY + chartHeight - (value - adjustedMin) * scaleY,
+    }));
 
-      if (index === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
+    if (points.length > 0) {
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i += 1) {
+        const prev = points[i - 1];
+        const curr = points[i];
+        const next = points[i + 1];
+        const cpx = (curr.x + (next?.x || curr.x)) / 2;
+        const cpy = (curr.y + (next?.y || curr.y)) / 2;
+        ctx.quadraticCurveTo(curr.x, curr.y, cpx, cpy);
       }
-    });
-
+      ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+    }
     ctx.stroke();
+
+    // Add title
+    ctx.fillStyle = '#111827';
+    ctx.font = 'bold 14px Helvetica';
+    ctx.textAlign = 'center';
+    ctx.fillText(chart.title || 'Price History', startX + chartWidth / 2, startY - 20);
   }
 
   /**
@@ -1623,6 +1805,26 @@ class ReportService {
     if (sentiment === 1) return 'Neutral';
     if (sentiment === 2 || sentiment === 3) return 'Positive';
     return 'Very Positive';
+  }
+
+  /**
+   * Apply smoothing filter to reduce noise in price data
+   * Uses simple moving average to show true price movement
+   */
+  private applySmoothingFilter(values: number[], windowSize: number = 5): number[] {
+    if (values.length <= windowSize) {
+      return values;
+    }
+
+    const smoothed: number[] = [];
+    for (let i = 0; i < values.length; i += 1) {
+      const start = Math.max(0, i - Math.floor(windowSize / 2));
+      const end = Math.min(values.length, i + Math.ceil(windowSize / 2));
+      const window = values.slice(start, end);
+      const average = window.reduce((a, b) => a + b, 0) / window.length;
+      smoothed.push(average);
+    }
+    return smoothed;
   }
 }
 

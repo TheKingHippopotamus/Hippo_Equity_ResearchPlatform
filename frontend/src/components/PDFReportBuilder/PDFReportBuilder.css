@@ -426,3 +426,29 @@
     gap: var(--spacing-md);
   }
 }
+
+
+.pdf-builder-merge-option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid rgba(31, 41, 51, 0.1);
+  margin-top: var(--spacing-xs);
+}
+
+.pdf-builder-merge-option label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+}
+
+.pdf-builder-merge-option select {
+  width: 100%;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-md);
+  border: 1px solid rgba(31, 41, 51, 0.18);
+  font-size: var(--font-size-sm);
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+}

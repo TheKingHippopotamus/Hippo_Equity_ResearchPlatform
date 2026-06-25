@@ -72,6 +72,13 @@ class ApiService {
     return response.data;
   }
 
+  async getRealtimeInstrument(symbol: string, instrumentId: string, domainId: string = '1') {
+    const response = await this.client.get(`/data/stock/${symbol}/realtime`, {
+      params: { instrumentId, domainId },
+    });
+    return response.data;
+  }
+
   // Translation Service endpoints
   async translate(key: string, language: SupportedLanguage = 'en'): Promise<string> {
     const response = await this.client.post('/translation/translate', {

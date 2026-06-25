@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./static/logo.png" alt="Hippo Equity Research Platform Logo" width="200" height="200" />
+<img src="./frontend/public/static/logo.png" alt="Hippo Equity Research Platform Logo" width="200" height="200" />
 
 
 ![Production Ready](https://img.shields.io/badge/status-production%20ready-0f766e?style=flat-square&logo=check-circle&logoColor=white)
@@ -147,6 +147,9 @@ graph TB
     ReportService --> PostgreSQL
     UserService --> PostgreSQL
     UserService --> Redis
+
+    linkStyle 0,1,2,3 stroke:#dc2626,stroke-width:2px,color:#dc2626;
+    linkStyle 9,10,11,12,13,14,15,16 stroke:#16a34a,stroke-width:2px,color:#16a34a;
 ```
 
 ### Service Communication Flow
@@ -886,7 +889,7 @@ Built with ❤️ using modern microservices architecture
 
 ## Runtime Architecture Diagram
 
-![Runtime Architecture Diagram](./static/images/hippo_system_flow_diagram.png)
+![Runtime Architecture Diagram](./frontend/public/static/images/hippo_system_flow_diagram.png)
 
 *System architecture showing request flows from browser through Apache reverse proxy, API Gateway, and microservices to data stores.*
 ## 1) Clone and prerequisites (user action)

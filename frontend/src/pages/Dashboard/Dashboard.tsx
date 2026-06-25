@@ -22,13 +22,15 @@ const normalizeHistoryLabel = (label: string) => {
   }
   const parsed = new Date(trimmed);
   if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10);
+    const hasTime = trimmed.includes('T') || trimmed.includes(':');
+    return hasTime ? parsed.toISOString() : parsed.toISOString().slice(0, 10);
   }
   const asNumber = Number(trimmed);
   if (!Number.isNaN(asNumber)) {
-    const numericDate = new Date(asNumber);
+    const ms = asNumber > 1e12 ? asNumber : asNumber * 1000;
+    const numericDate = new Date(ms);
     if (!Number.isNaN(numericDate.getTime())) {
-      return numericDate.toISOString().slice(0, 10);
+      return numericDate.toISOString();
     }
   }
   return trimmed;
@@ -225,48 +227,52 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // Transform price history to chart data format
-  const chartData = useMemo<ChartDataPoint[]>(() => {
+  const chartSeriesByRange = useMemo<Record<string, ChartDataPoint[]>>(() => {
     if (!priceHistory) {
-      return [];
+      return {};
     }
 
-    const entries = Object.entries(priceHistory)
-      .map(([range, series]) => {
-        const length = Math.min(series.labels?.length || 0, series.prices?.length || 0);
-        return { range, series, length };
-      })
+    return Object.entries(priceHistory).reduce((acc, [range, series]) => {
+      const length = Math.min(series.labels?.length || 0, series.prices?.length || 0);
+      if (length === 0) {
+        return acc;
+      }
+
+      const mapped: ChartDataPoint[] = [];
+      for (let i = 0; i < length; i += 1) {
+        const label = normalizeHistoryLabel(String(series.labels?.[i] ?? ''));
+        const value = series.prices?.[i];
+        if (!label || !Number.isFinite(value)) {
+          continue;
+        }
+        mapped.push({ date: label, value });
+      }
+
+      if (mapped.length > 0) {
+        acc[range] = mapped.sort((a, b) => a.date.localeCompare(b.date));
+      }
+      return acc;
+    }, {} as Record<string, ChartDataPoint[]>);
+  }, [priceHistory]);
+
+  const chartData = useMemo<ChartDataPoint[]>(() => {
+    const entries = Object.values(chartSeriesByRange)
+      .map((series) => ({ series, length: series.length }))
       .filter((entry) => entry.length > 0)
       .sort((a, b) => b.length - a.length);
 
-    const selectedSeries = entries[0]?.series;
-    if (!selectedSeries || !selectedSeries.labels || !selectedSeries.prices) {
-      return [];
-    }
+    return entries[0]?.series || [];
+  }, [chartSeriesByRange]);
 
-    const length = Math.min(selectedSeries.labels.length, selectedSeries.prices.length);
-    const mapped: ChartDataPoint[] = [];
-
-    for (let i = 0; i < length; i += 1) {
-      const label = normalizeHistoryLabel(String(selectedSeries.labels[i] ?? ''));
-      const value = selectedSeries.prices[i];
-      if (!label || !Number.isFinite(value)) {
-        continue;
+  const chartSeriesForRange = useMemo(() => {
+    const supportedRanges = ['1D', '1W', '1M', '3M', '6M', '1Y', 'ALL'] as const;
+    return supportedRanges.reduce((acc, key) => {
+      if (chartSeriesByRange[key]) {
+        acc[key] = chartSeriesByRange[key];
       }
-      mapped.push({ date: label, value });
-    }
-
-    return mapped.sort((a, b) => a.date.localeCompare(b.date));
-  }, [priceHistory]);
-
-  const chartTimeRange = useMemo(() => {
-    if (chartData.length < 2) {
-      return '';
-    }
-    const start = chartData[0].date;
-    const end = chartData[chartData.length - 1].date;
-    return `${start} → ${end}`;
-  }, [chartData]);
+      return acc;
+    }, {} as Partial<Record<(typeof supportedRanges)[number], ChartDataPoint[]>>);
+  }, [chartSeriesByRange]);
 
   // Transform news items for chart markers
   const chartNewsItems = useMemo<ChartNewsItem[]>(() => {
@@ -337,9 +343,9 @@ export const Dashboard: React.FC = () => {
                     ) : chartData.length > 0 ? (
                       <ChartComponent
                         data={chartData}
+                        seriesByRange={chartSeriesForRange}
                         type="area"
                         title={`${stockData.symbol} Price History`}
-                        timeRange={chartTimeRange}
                         newsItems={chartNewsItems}
                         xAxisLabel="Date"
                         yAxisLabel="Price (USD)"

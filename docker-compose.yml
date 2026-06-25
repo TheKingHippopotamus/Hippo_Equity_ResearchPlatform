@@ -159,7 +159,11 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - DATA_PROVIDER_API_URL=${DATA_PROVIDER_API_URL:-https://provider.example}
+      - DATA_PROVIDER_API_URL=${DATA_PROVIDER_API_URL}
+      - DATA_PROVIDER_API_KEY=${DATA_PROVIDER_API_KEY:-}
+      - REALTIME_API_URL=${REALTIME_API_URL}
+      - REALTIME_INSTRUMENT_ID=${REALTIME_INSTRUMENT_ID:-}
+      - REALTIME_DOMAIN_ID=${REALTIME_DOMAIN_ID:-1}
       - TRANSLATION_SERVICE_URL=http://translation-service:3004
     depends_on:
       - redis
@@ -206,6 +210,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=${REPORT_SERVICE_PORT:-3003}
+      - STATIC_ASSETS_PATH=/app/static
       - MINIO_ENDPOINT=minio
       - MINIO_PORT=9000
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
@@ -226,6 +231,8 @@ services:
       - translation-service
     ports:
       - "3003:3003"
+    volumes:
+      - ./frontend/public/static:/app/static:ro
     networks:
       - hippo-network
     restart: unless-stopped

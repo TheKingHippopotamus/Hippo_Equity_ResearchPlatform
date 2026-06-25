@@ -205,6 +205,49 @@ app.get('/stock/:symbol/history', async (req: Request, res: Response) => {
   }
 });
 
+// Get realtime instrument snapshot
+app.get('/stock/:symbol/realtime', async (req: Request, res: Response) => {
+  try {
+    const { symbol } = req.params;
+    const instrumentId = (req.query.instrumentId as string | undefined) || process.env.REALTIME_INSTRUMENT_ID;
+    const domainId = (req.query.domainId as string | undefined) || process.env.REALTIME_DOMAIN_ID || '1';
+
+    if (!symbol || typeof symbol !== 'string') {
+      return res.status(400).json({
+        error: 'Invalid symbol',
+        message: 'Stock symbol is required'
+      });
+    }
+
+    if (!instrumentId) {
+      return res.status(400).json({
+        error: 'Missing instrumentId',
+        message: 'instrumentId query parameter is required for realtime lookup',
+        symbol: symbol.toUpperCase()
+      });
+    }
+
+    const realtime = await dataService.fetchRealtimeInstrument(instrumentId, domainId);
+
+    return res.json({
+      symbol: symbol.toUpperCase(),
+      instrumentId,
+      domainId,
+      realtime,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Error fetching realtime instrument: ${errorMessage}`);
+
+    res.status(500).json({
+      error: 'Failed to fetch realtime instrument',
+      message: 'An error occurred while fetching realtime data. Please try again later.',
+      symbol: req.params.symbol
+    });
+  }
+});
+
 // Initialize Redis connection and start server
 async function startServer() {
   try {

@@ -2,7 +2,7 @@
 ## Diagram (runtime traffic)
 
 ### Runtime Architecture Diagram
-![Runtime Diagram](../static/images/hippo_system_flow_diagram.png)
+![Runtime Diagram](../frontend/public/static/images/hippo_system_flow_diagram.png)
 ## 1) Clone and prerequisites (user action)
 
 1. Clone the repository:
