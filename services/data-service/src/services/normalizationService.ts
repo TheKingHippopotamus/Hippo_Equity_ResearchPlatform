@@ -7,6 +7,26 @@ import {
 } from '../types/models.js';
 
 /**
+ * Strip the upstream provider's brand name(s) from rendered text so it never
+ * leaks into reports or UI. Terms are supplied via PROVIDER_BRAND_FILTER
+ * (comma-separated) and are deliberately kept out of source — see .env.example.
+ */
+const BRAND_TERMS = (process.env.PROVIDER_BRAND_FILTER || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const sanitizeBrand = (text: string): string => {
+  if (!text || BRAND_TERMS.length === 0) return text;
+  let out = text;
+  for (const term of BRAND_TERMS) {
+    const esc = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(esc, 'gi'), 'this platform');
+  }
+  return out;
+};
+
+/**
  * NormalizationService - Transforms raw API responses to internal schema
  * Property 4: Data Normalization Round-Trip
  * Requirements: 1.2, 1.5
@@ -67,9 +87,9 @@ class NormalizationService {
           
           return {
             id,
-            title,
-            content,
-            contentPreview,
+            title: sanitizeBrand(title),
+            content: sanitizeBrand(content),
+            contentPreview: sanitizeBrand(contentPreview),
             publishedAt,
             sentiment,
             source: (raw.source as string | undefined) || (raw.slug as string | undefined) || 'Unknown',
@@ -108,13 +128,13 @@ class NormalizationService {
         const rating = section?.rating as number | undefined;
         const summary = section?.summary as string | undefined;
         return {
-          keyPoints: Array.isArray(keyPoints) ? keyPoints : [],
-          rating: hasRating 
+          keyPoints: Array.isArray(keyPoints) ? keyPoints.map(sanitizeBrand) : [],
+          rating: hasRating
             ? (typeof rating === 'number' && rating >= 1 && rating <= 5
                 ? rating
                 : 3) // Default rating
             : undefined as never,
-          summary: summary || ''
+          summary: sanitizeBrand(summary || '')
         };
       };
 
@@ -172,12 +192,13 @@ class NormalizationService {
 
       return {
         symbol: rawData.symbol || symbol,
-        companyDescription:
+        companyDescription: sanitizeBrand(
           rawData.companyDescription ||
           rawData.company_description ||
           (analysis.companyDescription as string | undefined) ||
           (analysis.company_description as string | undefined) ||
-          '',
+          ''
+        ),
         competitors,
         financialHealth,
         growth,

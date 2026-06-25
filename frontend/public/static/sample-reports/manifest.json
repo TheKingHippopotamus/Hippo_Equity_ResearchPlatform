@@ -1,0 +1,11 @@
+{
+  "note": "Bundled sample equity research reports. Shown in the Reports panel when no user-generated reports exist (e.g. a fresh clone with no data provider configured).",
+  "samples": [
+    { "id": "sample-AAPL", "symbol": "AAPL", "language": "en", "fileSize": 717561, "generatedAt": "2026-06-25T19:20:00.000Z", "file": "/static/sample-reports/AAPL.pdf" },
+    { "id": "sample-MSFT", "symbol": "MSFT", "language": "en", "fileSize": 719874, "generatedAt": "2026-06-25T19:20:00.000Z", "file": "/static/sample-reports/MSFT.pdf" },
+    { "id": "sample-AMZN", "symbol": "AMZN", "language": "en", "fileSize": 717012, "generatedAt": "2026-06-25T19:20:00.000Z", "file": "/static/sample-reports/AMZN.pdf" },
+    { "id": "sample-UBER", "symbol": "UBER", "language": "en", "fileSize": 720244, "generatedAt": "2026-06-25T19:20:00.000Z", "file": "/static/sample-reports/UBER.pdf" },
+    { "id": "sample-BSX", "symbol": "BSX", "language": "en", "fileSize": 718843, "generatedAt": "2026-06-25T19:20:00.000Z", "file": "/static/sample-reports/BSX.pdf" },
+    { "id": "sample-ENVX", "symbol": "ENVX", "language": "en", "fileSize": 721338, "generatedAt": "2026-06-25T19:20:00.000Z", "file": "/static/sample-reports/ENVX.pdf" }
+  ]
+}

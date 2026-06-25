@@ -164,6 +164,7 @@ services:
       - REALTIME_API_URL=${REALTIME_API_URL}
       - REALTIME_INSTRUMENT_ID=${REALTIME_INSTRUMENT_ID:-}
       - REALTIME_DOMAIN_ID=${REALTIME_DOMAIN_ID:-1}
+      - PROVIDER_BRAND_FILTER=${PROVIDER_BRAND_FILTER:-}
       - TRANSLATION_SERVICE_URL=http://translation-service:3004
     depends_on:
       - redis

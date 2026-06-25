@@ -617,3 +617,11 @@
     gap: var(--spacing-md);
   }
 }
+
+/* Reports library trigger (header) */
+.dashboard-reports-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.dashboard-reports-button svg { flex: none; }

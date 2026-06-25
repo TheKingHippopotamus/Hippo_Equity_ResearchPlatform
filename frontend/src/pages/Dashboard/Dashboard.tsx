@@ -7,6 +7,7 @@ import { AutopilotQueue } from '../../components/AutopilotQueue/AutopilotQueue';
 import { PDFReportBuilder } from '../../components/PDFReportBuilder/PDFReportBuilder';
 import { ThemeToggle } from '../../components/ThemeToggle/ThemeToggle';
 import { ChartComponent } from '../../components/ChartComponent/ChartComponent';
+import { ReportsLibrary } from '../../components/ReportsLibrary/ReportsLibrary';
 import type { ChartDataPoint, ChartNewsItem } from '../../components/ChartComponent/ChartComponent';
 import { apiService } from '../../services/api';
 import { translationService } from '../../services/translation';
@@ -56,6 +57,7 @@ export const Dashboard: React.FC = () => {
   const [showAutopilot, setShowAutopilot] = useState<boolean>(false);
   const [symbolInput, setSymbolInput] = useState<string>('');
   const [symbolValidationError, setSymbolValidationError] = useState<string | null>(null);
+  const [showReports, setShowReports] = useState<boolean>(false);
   const [userId] = useState<string>(() => {
     // Generate or retrieve user ID
     const stored = localStorage.getItem('userId');
@@ -301,6 +303,17 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="dashboard-header-actions">
+            <button
+              type="button"
+              className="button button-secondary dashboard-reports-button"
+              onClick={() => setShowReports(true)}
+              title="View stored PDF reports"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="M9 13h6M9 16h4" />
+              </svg>
+              <span>Reports</span>
+            </button>
             <ThemeToggle value={theme} onChange={setTheme} />
             <LanguageSelector
               currentLanguage={language}
@@ -481,6 +494,12 @@ export const Dashboard: React.FC = () => {
           </aside>
         </div>
       </main>
+
+      <ReportsLibrary
+        userId={userId}
+        isOpen={showReports}
+        onClose={() => setShowReports(false)}
+      />
     </div>
   );
 };
